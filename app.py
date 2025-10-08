@@ -13,7 +13,7 @@ st.set_page_config(
 if 'activity' not in st.session_state: st.session_state['activity'] = pd.DataFrame()
 if 'skills' not in st.session_state: st.session_state['skills'] = pd.DataFrame()
 if 'projects' not in st.session_state: st.session_state['projects'] = pd.DataFrame()
-if 'role' not in st.session_state: st.session_state['role'] = None
+if 'role' not in st.session_state: st.session_state['role'] = "HR Head"
 if 'reportees' not in st.session_state: st.session_state['reportees'] = pd.DataFrame()
 
 # ---------------- Helper Functions ----------------
@@ -55,6 +55,8 @@ st.markdown("""
 /* Homepage Styling */
 .homepage-title {font-size: 36px; font-weight: bold; margin-bottom: 5px;}
 .homepage-desc {font-size: 18px; color: #555; margin-bottom: 20px;}
+/* Role Selector Positioning */
+.role-selector {position: absolute; top: 20px; right: 50px;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -70,19 +72,24 @@ page = st.sidebar.radio(
     ]
 )
 
+# ---------------- ROLE SELECTOR ----------------
+with st.container():
+    role = st.selectbox(
+        "Select Role", 
+        ["HR Head", "Project Manager"], 
+        index=0 if st.session_state['role']=="HR Head" else 1
+    )
+    st.session_state['role'] = role
+
 # ---------------- HOMEPAGE ----------------
 if page == "🏠 Homepage":
-    st.image("logo.png", width=200)  # Place your professional logo in the repo
+    st.image("logo.png", width=220)
     st.markdown('<div class="homepage-title">SmartWork.AI</div>', unsafe_allow_html=True)
     st.markdown('<div class="homepage-desc">The AI-powered tool for CHROs</div>', unsafe_allow_html=True)
 
-    st.markdown("---")
-    role = st.selectbox("Select Role", ["HR Head", "Project Manager"], index=0)
-    st.session_state['role'] = role
-
 # ---------------- DATA UPLOAD ----------------
 elif page == "📤 Upload Data":
-    st.image("logo.png", width=200)
+    st.image("logo.png", width=220)
     st.subheader("Upload Data 📤")
     f1 = st.file_uploader("Employee Activity", type=["csv","xlsx"])
     f2 = st.file_uploader("Skill Training", type=["csv","xlsx"])
@@ -98,12 +105,11 @@ elif page == "📤 Upload Data":
 
 # ---------------- DASHBOARD & ANALYTICS ----------------
 elif page == "🏠📈 Dashboard & Analytics":
-    st.image("logo.png", width=200)
-    st.markdown(f"**Role:** {st.session_state.get('role','Not selected')}", unsafe_allow_html=True)
+    st.image("logo.png", width=220)
+    st.markdown(f"**Current Role:** {st.session_state['role']}", unsafe_allow_html=True)
     
     df = calculate_utilization(st.session_state['activity'])
     proj_df = st.session_state['projects']
-    skills_df = st.session_state['skills']
     
     if df.empty:
         st.info("Upload Employee Activity first")
@@ -143,7 +149,6 @@ elif page == "🏠📈 Dashboard & Analytics":
         # HR Only AI Recommendations
         if role == "HR Head":
             st.subheader("AI Recommendations for HR Head 🔥")
-            # Example: Advanced logic could go here
             recommendations = [
                 "Reallocate underutilized employees to high-priority projects.",
                 "Upskill employees with missing critical skills for upcoming projects.",
@@ -158,8 +163,8 @@ elif page == "🏠📈 Dashboard & Analytics":
 
 # ---------------- SKILL RECOMMENDATIONS ----------------
 elif page == "🎯 Skill Recommendations":
-    st.image("logo.png", width=200)
-    st.markdown(f"**Role:** {st.session_state.get('role','Not selected')}", unsafe_allow_html=True)
+    st.image("logo.png", width=220)
+    st.markdown(f"**Current Role:** {st.session_state['role']}", unsafe_allow_html=True)
     df_emp = st.session_state['activity']
     df_skills = st.session_state['skills']
     if df_emp.empty or df_skills.empty: st.info("Upload both Employee Activity and Skills file first")
@@ -174,8 +179,8 @@ elif page == "🎯 Skill Recommendations":
 
 # ---------------- PROJECT ASSIGNMENT ----------------
 elif page == "🚀 Project Assignment":
-    st.image("logo.png", width=200)
-    st.markdown(f"**Role:** {st.session_state.get('role','Not selected')}", unsafe_allow_html=True)
+    st.image("logo.png", width=220)
+    st.markdown(f"**Current Role:** {st.session_state['role']}", unsafe_allow_html=True)
     df_emp = st.session_state['activity']
     df_proj = st.session_state['projects']
     if df_emp.empty or df_proj.empty:
@@ -193,6 +198,7 @@ elif page == "🚀 Project Assignment":
                         'Skill_Match': ", ".join(emp_skills & proj_skills)
                     })
         st.dataframe(pd.DataFrame(assignments), height=400)
+
 
 
 

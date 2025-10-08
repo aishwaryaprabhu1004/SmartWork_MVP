@@ -1,35 +1,20 @@
 import streamlit as st
 import pandas as pd
+import plotly.express as px
 
 # ---------------- Page Config ----------------
-st.set_page_config(
-    page_title="SmartWork.AI",
-    page_icon="💡",
-    layout="wide"
-)
+st.set_page_config(page_title="SmartWork.AI", page_icon="💡", layout="wide")
 
 # ---------------- Custom Sidebar ----------------
 st.markdown("""
 <style>
-/* Make sidebar wider */
-[data-testid="stSidebar"] {
-    width: 250px;
-}
-
-/* Big icons, centered */
-.sidebar .sidebar-content {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-}
-.sidebar .sidebar-content div[role="radiogroup"] > label {
-    font-size: 22px;
-    padding: 15px 0;
-}
+[data-testid="stSidebar"] { width: 250px; }
+.sidebar .sidebar-content { display: flex; flex-direction: column; align-items: center; }
+.sidebar .sidebar-content div[role="radiogroup"] > label { font-size: 22px; padding: 15px 0; }
 </style>
 """, unsafe_allow_html=True)
 
-# ---------------- Sidebar Icons ----------------
+# ---------------- Sidebar ----------------
 page = st.sidebar.radio(
     "",
     options=[
@@ -49,21 +34,32 @@ if 'projects' not in st.session_state: st.session_state['projects'] = pd.DataFra
 
 # ---------------- Helper Functions ----------------
 def load_file(file):
-    if file: return pd.read_csv(file) if file.name.endswith(".csv") else pd.read_excel(file)
+    if file:
+        return pd.read_csv(file) if file.name.endswith(".csv") else pd.read_excel(file)
     return pd.DataFrame()
 
 def calculate_utilization(df):
-    if df.empty: return df
+    if df.empty:
+        return df
+    # Ensure default columns exist
+    for col in ['Tasks_Completed','Meetings_Duration','Decisions_Made','Docs_Updated']:
+        if col not in df.columns:
+            df[col] = 0
     df['Activity_Score'] = (
-        0.4*df.get('Tasks_Completed',0) +
-        0.3*df.get('Meetings_Duration',0) +
-        0.2*df.get('Decisions_Made',0) +
-        0.1*df.get('Docs_Updated',0)
+        0.4*df['Tasks_Completed'] +
+        0.3*df['Meetings_Duration'] +
+        0.2*df['Decisions_Made'] +
+        0.1*df['Docs_Updated']
     )
-    df['True_Utilization'] = (df['Activity_Score']/df['Activity_Score'].max())*100
+    df['True_Utilization'] = (df['Activity_Score']/df['Activity_Score'].max()*100) if df['Activity_Score'].max()>0 else 0
     df['Bench_Status'] = df['True_Utilization'].apply(
         lambda x: "On Bench" if x<20 else ("Partially Utilized" if x<50 else "Fully Utilized")
     )
+    # Ensure Employee and Dept exist
+    if 'Employee' not in df.columns: df['Employee'] = "Unknown"
+    if 'Dept' not in df.columns: df['Dept'] = "Unknown"
+    if 'Bench_Duration' not in df.columns: df['Bench_Duration'] = 0
+    if 'Skills' not in df.columns: df['Skills'] = ""
     return df
 
 # ---------------- Pages ----------------
@@ -84,26 +80,22 @@ elif page=="🏠 Dashboard":
     st.subheader("Dashboard 🏠")
     df = calculate_utilization(st.session_state['activity'])
     if df.empty:
-        st.info("Upload Employee Activity first")
+        st.info("Upload Employee Activity first to see the dashboard.")
     else:
-        # ---------------- Fill Page ----------------
         total_emp = len(df)
         bench_count = len(df[df['Bench_Status']=="On Bench"])
         part_util = len(df[df['Bench_Status']=="Partially Utilized"])
         full_util = len(df[df['Bench_Status']=="Fully Utilized"])
 
-        # KPI cards - horizontal and more space
-        k1,k2,k3,k4 = st.columns([1,1,1,1])
+        k1,k2,k3,k4 = st.columns(4)
         k1.metric("Total Employees", total_emp)
         k2.metric("On Bench", bench_count)
         k3.metric("Partial Utilization", part_util)
         k4.metric("Full Utilization", full_util)
 
-        # Multi-column charts
         col1, col2, col3 = st.columns(3)
         bench_chart = df['Bench_Status'].value_counts().reset_index()
         bench_chart.columns = ['Bench','Count']
-        import plotly.express as px
         col1.plotly_chart(px.bar(bench_chart,'Bench','Count',color='Bench',height=300,template="plotly_white"), use_container_width=True)
 
         dept_util = df.groupby('Dept')['True_Utilization'].mean().reset_index()
@@ -114,14 +106,20 @@ elif page=="🏠 Dashboard":
 elif page=="🪑 Bench Utilization":
     st.subheader("Bench Utilization 🪑")
     df = calculate_utilization(st.session_state['activity'])
-    st.dataframe(df[['Employee','Dept','Bench_Status','True_Utilization']], height=400)
+    if df.empty:
+        st.info("Upload Employee Activity first to see Bench Utilization.")
+    else:
+        for col in ['Employee','Dept','Bench_Status','True_Utilization']:
+            if col not in df.columns:
+                df[col] = "Unknown" if col in ['Employee','Dept'] else "N/A"
+        st.dataframe(df[['Employee','Dept','Bench_Status','True_Utilization']], height=400)
 
 elif page=="🎯 Skill Recommendations":
     st.subheader("Skill Recommendations 🎯")
-    # Fill page with recommendations
     df_emp = st.session_state['activity']
     df_skills = st.session_state['skills']
-    if df_emp.empty or df_skills.empty: st.info("Upload both Employee Activity and Skills file first")
+    if df_emp.empty or df_skills.empty:
+        st.info("Upload both Employee Activity and Skills files first.")
     else:
         required_skills = df_skills['Skill'].unique().tolist()
         def rec(skills_str):
@@ -135,23 +133,27 @@ elif page=="🚀 Project Assignment":
     st.subheader("Project Assignment 🚀")
     df_emp = st.session_state['activity']
     df_proj = st.session_state['projects']
-    assignments = []
-    for _, emp in df_emp.iterrows():
-        emp_skills = set(str(emp.get('Skills','')).split(","))
-        for _, proj in df_proj.iterrows():
-            proj_skills = set(str(proj.get('Required_Skills','')).split(","))
-            if emp_skills & proj_skills:
-                assignments.append({
-                    'Employee': emp.get('Employee',''),
-                    'Project': proj.get('Project_Name',''),
-                    'Skill_Match': ", ".join(emp_skills & proj_skills)
-                })
-    st.dataframe(pd.DataFrame(assignments), height=400)
+    if df_emp.empty or df_proj.empty:
+        st.info("Upload both Employee Activity and Project Assignment files first.")
+    else:
+        assignments = []
+        for _, emp in df_emp.iterrows():
+            emp_skills = set(str(emp.get('Skills','')).split(","))
+            for _, proj in df_proj.iterrows():
+                proj_skills = set(str(proj.get('Required_Skills','')).split(","))
+                if emp_skills & proj_skills:
+                    assignments.append({
+                        'Employee': emp.get('Employee',''),
+                        'Project': proj.get('Project_Name',''),
+                        'Skill_Match': ", ".join(emp_skills & proj_skills)
+                    })
+        st.dataframe(pd.DataFrame(assignments), height=400)
 
 elif page=="📈 Analytics":
     st.subheader("Analytics 📈")
     df = calculate_utilization(st.session_state['activity'])
-    if df.empty: st.info("Upload Employee Activity first")
+    if df.empty:
+        st.info("Upload Employee Activity first to see Analytics.")
     else:
         c1,c2 = st.columns(2)
         c1.plotly_chart(px.scatter(df,'Bench_Duration','True_Utilization','Bench_Status',hover_data=['Employee'],height=300,template="plotly_white"), use_container_width=True)

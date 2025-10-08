@@ -15,6 +15,7 @@ if 'activity' not in st.session_state: st.session_state['activity'] = pd.DataFra
 if 'skills' not in st.session_state: st.session_state['skills'] = pd.DataFrame()
 if 'projects' not in st.session_state: st.session_state['projects'] = pd.DataFrame()
 if 'role' not in st.session_state: st.session_state['role'] = "HR Head"
+if 'reportees' not in st.session_state: st.session_state['reportees'] = pd.DataFrame()
 
 # ---------------- Top Bar ----------------
 top_col1, top_col2 = st.columns([1, 3])
@@ -67,11 +68,6 @@ if page == "🏠 Homepage":
     st.session_state['role'] = st.selectbox("Select your role:", ["HR Head", "Project Manager"], index=0, label_visibility="visible")
 
     st.markdown("---")
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Total Employees", "50")
-    col2.metric("Projects Ongoing", "12")
-    col3.metric("Bench Employees", "3")
-    st.markdown("---")
     st.markdown("""
     ### Key Features
     - 📊 **Dashboard & Analytics**: Real-time insights on utilization & performance.
@@ -92,24 +88,24 @@ elif page == "📤 Upload Data":
     with col3:
         f3 = st.file_uploader("Project Assignment", type=["csv","xlsx"])
         if f3: st.session_state['projects'] = load_file(f3)
+    
+    # Project manager reportees file
+    if st.session_state['role'] == "Project Manager":
+        f4 = st.file_uploader("Your Reportees", type=["csv","xlsx"])
+        if f4: st.session_state['reportees'] = load_file(f4)
 
 elif page == "🏠 Dashboard & Analytics":
     st.subheader("Dashboard & Analytics 🏠📈")
     df = calculate_utilization(st.session_state['activity'])
+    
     if df.empty:
         st.info("Upload Employee Activity first")
     else:
-        # KPIs
-        total_emp = len(df)
-        bench_count = len(df[df['Bench_Status']=="On Bench"])
-        part_util = len(df[df['Bench_Status']=="Partially Utilized"])
-        full_util = len(df[df['Bench_Status']=="Fully Utilized"])
-        k1,k2,k3,k4 = st.columns([1,1,1,1])
-        k1.metric("Total Employees", total_emp)
-        k2.metric("On Bench", bench_count)
-        k3.metric("Partial Utilization", part_util)
-        k4.metric("Full Utilization", full_util)
-
+        # Filter for Project Manager role
+        if st.session_state['role'] == "Project Manager" and not st.session_state['reportees'].empty:
+            reportee_list = st.session_state['reportees']['Employee'].tolist()
+            df = df[df['Employee'].isin(reportee_list)]
+        
         # Bench Status Bar Chart
         bench_chart = df['Bench_Status'].value_counts().reset_index()
         bench_chart.columns = ['Bench_Status','Count']
@@ -138,7 +134,7 @@ elif page == "🏠 Dashboard & Analytics":
         )
         st.altair_chart(line_chart, use_container_width=True)
 
-        # AI Recommendations for HR Head
+        # AI Recommendations for HR Head only
         if st.session_state['role'] == "HR Head":
             st.subheader("AI Recommendations 🔹")
             st.markdown("""
@@ -184,6 +180,7 @@ elif page == "🚀 Project Assignment":
                         'Skill_Match': ", ".join(emp_skills & proj_skills)
                     })
         st.dataframe(pd.DataFrame(assignments), height=400)
+
 
 
 

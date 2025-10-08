@@ -3,18 +3,14 @@ import pandas as pd
 import altair as alt
 
 # ---------------- Page Config ----------------
-st.set_page_config(
-    page_title="SmartWork.AI",
-    page_icon="💡",
-    layout="wide"
-)
+st.set_page_config(page_title="SmartWork.AI", page_icon="💡", layout="wide")
 
 # ---------------- Session State ----------------
 if 'activity' not in st.session_state: st.session_state['activity'] = pd.DataFrame()
 if 'skills' not in st.session_state: st.session_state['skills'] = pd.DataFrame()
 if 'projects' not in st.session_state: st.session_state['projects'] = pd.DataFrame()
-if 'reportees' not in st.session_state: st.session_state['reportees'] = pd.DataFrame()
-if 'role' not in st.session_state: st.session_state['role'] = None
+if 'costs' not in st.session_state: st.session_state['costs'] = pd.DataFrame()
+if 'role' not in st.session_state: st.session_state['role'] = 'HR Head'
 
 # ---------------- Helper Functions ----------------
 def load_file(file):
@@ -23,14 +19,15 @@ def load_file(file):
             if file.name.endswith(".csv"):
                 return pd.read_csv(file)
             else:
-                return pd.read_excel(file, engine='openpyxl')
-        except ImportError:
-            st.error("openpyxl not installed. Please upload CSV instead.")
+                st.error("Please upload CSV file for compatibility.")
+                return pd.DataFrame()
+        except Exception as e:
+            st.error(f"File load error: {e}")
             return pd.DataFrame()
     return pd.DataFrame()
 
 def calculate_utilization(df):
-    if df.empty:
+    if df.empty: 
         return df
     df['Activity_Score'] = (
         0.4*df.get('Tasks_Completed',0) +
@@ -44,145 +41,177 @@ def calculate_utilization(df):
     )
     return df
 
-def ai_recommendations(df, role):
-    if df.empty:
-        return []
-    recs = []
-    if role=="HR Head":
-        low_util = df[df['True_Utilization']<50]
-        for _, row in low_util.iterrows():
-            recs.append(f"Upskill {row['Employee']} in missing skills to improve billing.")
-    elif role=="Project Manager":
-        low_util = df[df['True_Utilization']<50]
-        for _, row in low_util.iterrows():
-            recs.append(f"Assign tasks matching {row['Employee']}'s skills to increase project output.")
-    return recs
+def generate_ai_recommendations(df_activity, df_costs, df_projects):
+    """AI recommendations for HR Head."""
+    if df_activity.empty or df_costs.empty:
+        return ["Upload activity and costs data to generate recommendations"]
+    
+    df = df_activity.copy()
+    if 'Employee' not in df.columns or 'Employee' not in df_costs.columns:
+        return ["Employee column missing in data."]
+    
+    df = pd.merge(df, df_costs[['Employee','Cost']], on='Employee', how='left')
+    df['Cost_per_Utilization'] = df['Cost'] / (df['True_Utilization'] + 1e-5)
+    
+    # Rank employees by cost per utilization
+    df_sorted = df.sort_values(by='Cost_per_Utilization', ascending=False)
+    
+    recommendations = []
+    
+    # Top 3 high-cost low-utilization employees
+    high_cost_low_util = df_sorted[df_sorted['True_Utilization']<50].head(3)
+    for idx, row in high_cost_low_util.iterrows():
+        recommendations.append(
+            f"Consider reassigning or upskilling {row['Employee']} (Cost per Utilization: {row['Cost_per_Utilization']:.2f})"
+        )
+    
+    # Check project skill matches
+    if not df_projects.empty:
+        for _, proj in df_projects.iterrows():
+            required_skills = set(str(proj.get('Required_Skills','')).split(","))
+            for _, emp in df.iterrows():
+                emp_skills = set(str(emp.get('Skills','')).split(","))
+                missing = required_skills - emp_skills
+                if len(missing)/len(required_skills) > 0.5:
+                    recommendations.append(
+                        f"Consider training {emp['Employee']} on skills {', '.join(missing)} for project {proj['Project_Name']}"
+                    )
+    if not recommendations:
+        recommendations.append("No immediate recommendations. Team is optimized.")
+    
+    return recommendations
 
-# ---------------- File Upload ----------------
-st.sidebar.subheader("1️⃣ Upload Data")
-with st.sidebar.form("upload_form"):
-    f1 = st.file_uploader("Employee Activity", type=["csv","xlsx"])
-    f2 = st.file_uploader("Skill Training", type=["csv","xlsx"])
-    f3 = st.file_uploader("Project Assignment", type=["csv","xlsx"])
-    f4 = st.file_uploader("Reportees Mapping", type=["csv","xlsx"])
-    submitted = st.form_submit_button("Upload Files")
-    if submitted:
-        if f1: st.session_state['activity'] = load_file(f1)
-        if f2: st.session_state['skills'] = load_file(f2)
-        if f3: st.session_state['projects'] = load_file(f3)
-        if f4: st.session_state['reportees'] = load_file(f4)
-        st.success("Files uploaded successfully!")
+# ---------------- File Upload Section ----------------
+st.title("SmartWork.AI Data Upload 📤")
+col1, col2, col3, col4 = st.columns(4)
+
+with col1:
+    f1 = st.file_uploader("Employee Activity CSV", type=["csv"])
+with col2:
+    f2 = st.file_uploader("Skill Training CSV", type=["csv"])
+with col3:
+    f3 = st.file_uploader("Project Assignment CSV", type=["csv"])
+with col4:
+    f4 = st.file_uploader("Employee Costs CSV", type=["csv"])
+
+if st.button("Submit Files"):
+    if f1: st.session_state['activity'] = load_file(f1)
+    if f2: st.session_state['skills'] = load_file(f2)
+    if f3: st.session_state['projects'] = load_file(f3)
+    if f4: st.session_state['costs'] = load_file(f4)
+    st.success("Files uploaded successfully!")
 
 # ---------------- Role Selection ----------------
-st.sidebar.subheader("2️⃣ Select Role")
-role_options = ["HR Head", "Project Manager"]
-role = st.sidebar.selectbox("Current Role:", role_options, index=role_options.index(st.session_state['role']) if st.session_state['role'] else 0)
-st.session_state['role'] = role
+role = st.selectbox("Select Role", ["HR Head","Project Manager"], index=0, key="role")
 
-# ---------------- Sidebar Navigation ----------------
-available_pages = ["🏠 Dashboard & Analytics", "🪑 Bench Utilization", "🎯 Skill Recommendations", "🚀 Project Assignment"]
-page = st.sidebar.radio("Navigation", options=available_pages)
+# ---------------- Sidebar ----------------
+page = st.sidebar.radio(
+    "",
+    options=[
+        "🏠 Dashboard & Analytics",
+        "🪑 Bench Utilization",
+        "🎯 Skill Recommendations",
+        "🚀 Project Assignment"
+    ]
+)
 
 # ---------------- Pages ----------------
-df = calculate_utilization(st.session_state['activity'])
-reportees_df = st.session_state['reportees']
+df_emp = calculate_utilization(st.session_state['activity'])
+df_skills = st.session_state['skills']
+df_proj = st.session_state['projects']
+df_costs = st.session_state['costs']
 
-# Filter for Project Manager
-if role=="Project Manager" and not reportees_df.empty:
-    pm_name = st.sidebar.selectbox("Select Your Name:", reportees_df['PM_Name'].unique())
-    emp_list = reportees_df[reportees_df['PM_Name']==pm_name]['Employee'].tolist()
-    df = df[df['Employee'].isin(emp_list)]
-
-# ---------------- Dashboard & Analytics ----------------
 if page=="🏠 Dashboard & Analytics":
     st.subheader("Dashboard & Analytics 🏠📈")
-    if df.empty:
-        st.info("Upload relevant data first")
+    if df_emp.empty:
+        st.info("Upload Employee Activity first")
     else:
-        # Metrics
-        total_emp = len(df)
-        bench_count = len(df[df['Bench_Status']=="On Bench"])
-        part_util = len(df[df['Bench_Status']=="Partially Utilized"])
-        full_util = len(df[df['Bench_Status']=="Fully Utilized"])
-        k1,k2,k3,k4 = st.columns([1,1,1,1])
+        total_emp = len(df_emp)
+        bench_count = len(df_emp[df_emp['Bench_Status']=="On Bench"])
+        part_util = len(df_emp[df_emp['Bench_Status']=="Partially Utilized"])
+        full_util = len(df_emp[df_emp['Bench_Status']=="Fully Utilized"])
+        k1,k2,k3,k4 = st.columns(4)
         k1.metric("Total Employees", total_emp)
         k2.metric("On Bench", bench_count)
         k3.metric("Partial Utilization", part_util)
         k4.metric("Full Utilization", full_util)
 
-        # Bench Bar Chart
-        bench_chart = df['Bench_Status'].value_counts().reset_index()
+        # Bench Status Bar
+        bench_chart = df_emp['Bench_Status'].value_counts().reset_index()
         bench_chart.columns = ['Bench_Status','Count']
         st.altair_chart(
             alt.Chart(bench_chart).mark_bar().encode(
-                x='Bench_Status', y='Count', color='Bench_Status'
-            ),
-            use_container_width=True
+                x='Bench_Status',
+                y='Count',
+                color='Bench_Status'
+            ), use_container_width=True
         )
 
-        # Dept Util Line Chart
-        dept_util = df.groupby('Dept')['True_Utilization'].mean().reset_index()
+        # Dept Utilization Line Chart
+        dept_util = df_emp.groupby('Dept')['True_Utilization'].mean().reset_index()
         st.altair_chart(
             alt.Chart(dept_util).mark_line(point=True).encode(
-                x='Dept', y='True_Utilization', color='Dept'
-            ),
-            use_container_width=True
+                x='Dept',
+                y='True_Utilization',
+                color='Dept'
+            ), use_container_width=True
         )
 
-        # Scatter Chart
-        if 'Bench_Duration' in df.columns:
+        # Cost per Dept Pie Chart
+        if not df_costs.empty:
+            dept_cost = df_emp.merge(df_costs, on='Employee', how='left').groupby('Dept')['Cost'].sum().reset_index()
             st.altair_chart(
-                alt.Chart(df).mark_circle(size=60).encode(
-                    x='Bench_Duration', y='True_Utilization', color='Bench_Status',
-                    tooltip=['Employee','Dept','Bench_Status','True_Utilization']
-                ),
-                use_container_width=True
+                alt.Chart(dept_cost).mark_arc().encode(
+                    theta='Cost',
+                    color='Dept'
+                ), use_container_width=True
             )
 
-        # AI Recommendations
-        recs = ai_recommendations(df, role)
-        if recs:
-            st.subheader("AI-based Recommendations")
-            for r in recs[:10]:
-                st.write("•", r)
+        st.dataframe(df_emp[['Employee','Dept','Bench_Status','True_Utilization']], height=300)
 
-        st.dataframe(df[['Employee','Dept','Bench_Status','True_Utilization']], height=400)
+        # AI Recommendations (HR Head only)
+        if role=="HR Head":
+            st.subheader("💡 AI Recommendations")
+            recommendations = generate_ai_recommendations(df_emp, df_costs, df_proj)
+            for rec in recommendations:
+                st.info(rec)
 
-# ---------------- Bench Utilization ----------------
 elif page=="🪑 Bench Utilization":
     st.subheader("Bench Utilization 🪑")
-    if df.empty:
+    if df_emp.empty:
         st.info("Upload Employee Activity first")
     else:
-        st.dataframe(df[['Employee','Dept','Bench_Status','True_Utilization']], height=400)
+        st.dataframe(df_emp[['Employee','Dept','Bench_Status','True_Utilization']], height=400)
 
-# ---------------- Skill Recommendations ----------------
 elif page=="🎯 Skill Recommendations":
     st.subheader("Skill Recommendations 🎯")
-    df_skills = st.session_state['skills']
-    if df.empty or df_skills.empty:
-        st.info("Upload both Employee Activity and Skills file first")
+    if df_emp.empty or df_skills.empty:
+        st.info("Upload Employee Activity and Skills first")
     else:
         required_skills = df_skills['Skill'].unique().tolist()
         def rec(skills_str):
             emp_skills = str(skills_str).split(",") if pd.notnull(skills_str) else []
             missing = list(set(required_skills) - set(emp_skills))
             return ", ".join(missing) if missing else "None"
-        df['Recommended_Skills'] = df['Skills'].apply(rec)
-        st.dataframe(df[['Employee','Skills','Recommended_Skills','Bench_Status']], height=400)
+        df_emp['Recommended_Skills'] = df_emp['Skills'].apply(rec)
+        st.dataframe(df_emp[['Employee','Skills','Recommended_Skills','Bench_Status']], height=400)
 
-# ---------------- Project Assignment ----------------
 elif page=="🚀 Project Assignment":
     st.subheader("Project Assignment 🚀")
-    df_proj = st.session_state['projects']
-    if df.empty or df_proj.empty:
-        st.info("Upload Employee Activity and Project Assignment file first")
+    if df_emp.empty or df_proj.empty:
+        st.info("Upload Employee Activity and Project Assignment first")
     else:
         assignments = []
-        for _, emp in df.iterrows():
+        if role=="Project Manager":
+            st.subheader("Viewing your reportees")
+            pm_file = st.file_uploader("Upload your reportees CSV (Employee,Project)", type=["csv"])
+            if pm_file:
+                pm_df = load_file(pm_file)
+                df_proj = df_proj[df_proj['Assigned_Employee'].isin(pm_df['Employee'])]
+        for _, emp in df_emp.iterrows():
             emp_skills = set(str(emp.get('Skills','')).split(","))
             for _, proj in df_proj.iterrows():
-                proj_skills = set(str(proj.get('Required_Skills','')).split(",")) if pd.notnull(proj.get('Required_Skills','')) else set()
+                proj_skills = set(str(proj.get('Required_Skills','')).split(","))
                 if emp_skills & proj_skills:
                     assignments.append({
                         'Employee': emp.get('Employee',''),
@@ -190,5 +219,6 @@ elif page=="🚀 Project Assignment":
                         'Skill_Match': ", ".join(emp_skills & proj_skills)
                     })
         st.dataframe(pd.DataFrame(assignments), height=400)
+
 
 

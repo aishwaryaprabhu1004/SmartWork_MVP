@@ -12,9 +12,19 @@ st.set_page_config(
 # ---------------- Custom Sidebar ----------------
 st.markdown("""
 <style>
-[data-testid="stSidebar"] { width: 220px; }
-.sidebar .sidebar-content { display: flex; flex-direction: column; align-items: flex-start; }
-.sidebar .sidebar-content div[role="radiogroup"] > label { font-size: 18px; padding: 10px 0; }
+/* Make sidebar wider */
+[data-testid="stSidebar"] {width: 250px;}
+
+/* Big icons, centered */
+.sidebar .sidebar-content {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+}
+.sidebar .sidebar-content div[role="radiogroup"] > label {
+    font-size: 18px;
+    padding: 10px 0;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -38,21 +48,41 @@ if 'projects' not in st.session_state: st.session_state['projects'] = pd.DataFra
 
 # ---------------- Helper Functions ----------------
 def load_file(file):
-    if file: return pd.read_csv(file) if file.name.endswith(".csv") else pd.read_excel(file)
+    if file:
+        return pd.read_csv(file) if file.name.endswith(".csv") else pd.read_excel(file)
     return pd.DataFrame()
 
 def calculate_utilization(df):
-    if df.empty: return df
+    if df.empty:
+        return df
+    
+    # Fill missing columns
+    for col in ['Tasks_Completed','Meetings_Duration','Decisions_Made','Docs_Updated',
+                'Emails_Sent','MOM_Completed','Deadlines_Met']:
+        if col not in df.columns:
+            df[col] = 0
+
+    # Activity Score weights
     df['Activity_Score'] = (
-        0.4*df.get('Tasks_Completed',0) +
-        0.3*df.get('Meetings_Duration',0) +
-        0.2*df.get('Decisions_Made',0) +
-        0.1*df.get('Docs_Updated',0)
+        0.25*df['Tasks_Completed'] +
+        0.25*df['Meetings_Duration'] +
+        0.2*df['Decisions_Made'] +
+        0.15*df['Docs_Updated'] +
+        0.1*df['MOM_Completed'] +
+        0.05*df['Deadlines_Met']
     )
+
     df['True_Utilization'] = (df['Activity_Score']/df['Activity_Score'].max())*100
+
+    # Bench Status
+    LOW_UTIL_THRESHOLD = 20
     df['Bench_Status'] = df['True_Utilization'].apply(
-        lambda x: "On Bench" if x<20 else ("Partially Utilized" if x<50 else "Fully Utilized")
+        lambda x: "On Bench" if x<LOW_UTIL_THRESHOLD else ("Partially Utilized" if x<50 else "Fully Utilized")
     )
+
+    # Dynamic Bench Duration (weeks) - simple model
+    df['Bench_Duration'] = ((LOW_UTIL_THRESHOLD - df['True_Utilization']).clip(lower=0)/LOW_UTIL_THRESHOLD*4).astype(int)
+    
     return df
 
 # ---------------- Pages ----------------
@@ -75,29 +105,37 @@ elif page=="🏠 Dashboard":
     if df.empty:
         st.info("Upload Employee Activity first")
     else:
-        # KPI metrics
+        # KPI cards
         total_emp = len(df)
         bench_count = len(df[df['Bench_Status']=="On Bench"])
         part_util = len(df[df['Bench_Status']=="Partially Utilized"])
         full_util = len(df[df['Bench_Status']=="Fully Utilized"])
-
         k1,k2,k3,k4 = st.columns(4)
         k1.metric("Total Employees", total_emp)
         k2.metric("On Bench", bench_count)
         k3.metric("Partial Utilization", part_util)
         k4.metric("Full Utilization", full_util)
 
-        # Bench Status chart using Altair
-        bench_chart_data = df['Bench_Status'].value_counts().reset_index()
-        bench_chart_data.columns = ['Bench_Status', 'Count']
-        chart = alt.Chart(bench_chart_data).mark_bar().encode(
+        # Bench Status Chart
+        bench_chart = alt.Chart(df).mark_bar().encode(
             x='Bench_Status',
-            y='Count',
+            y='count()',
             color='Bench_Status'
-        ).properties(width=400, height=300)
-        st.altair_chart(chart, use_container_width=True)
+        ).properties(height=300)
+        # Dept Utilization Chart
+        dept_util = df.groupby('Dept')['True_Utilization'].mean().reset_index()
+        dept_chart = alt.Chart(dept_util).mark_bar().encode(
+            x='Dept',
+            y='True_Utilization',
+            color='Dept'
+        ).properties(height=300)
 
-        st.dataframe(df[['Employee','Dept','Bench_Status','True_Utilization']], height=300)
+        c1,c2 = st.columns(2)
+        c1.altair_chart(bench_chart,use_container_width=True)
+        c2.altair_chart(dept_chart,use_container_width=True)
+
+        # Employee Table
+        st.dataframe(df[['Employee','Dept','Bench_Status','True_Utilization','Bench_Duration']], height=300)
 
 elif page=="🪑 Bench Utilization":
     st.subheader("Bench Utilization 🪑")
@@ -105,7 +143,7 @@ elif page=="🪑 Bench Utilization":
     if df.empty:
         st.info("Upload Employee Activity first")
     else:
-        st.dataframe(df[['Employee','Dept','Bench_Status','True_Utilization']], height=400)
+        st.dataframe(df[['Employee','Dept','Bench_Status','True_Utilization','Bench_Duration']], height=400)
 
 elif page=="🎯 Skill Recommendations":
     st.subheader("Skill Recommendations 🎯")
@@ -117,7 +155,7 @@ elif page=="🎯 Skill Recommendations":
         required_skills = df_skills['Skill'].unique().tolist()
         def rec(skills_str):
             emp_skills = str(skills_str).split(",") if pd.notnull(skills_str) else []
-            missing = list(set(required_skills) - set(emp_skills))
+            missing = list(set(required_skills)-set(emp_skills))
             return ", ".join(missing) if missing else "None"
         df_emp['Recommended_Skills'] = df_emp['Skills'].apply(rec)
         st.dataframe(df_emp[['Employee','Skills','Recommended_Skills','Bench_Status']], height=400)
@@ -127,7 +165,7 @@ elif page=="🚀 Project Assignment":
     df_emp = st.session_state['activity']
     df_proj = st.session_state['projects']
     if df_emp.empty or df_proj.empty:
-        st.info("Upload both Employee Activity and Project Assignment first")
+        st.info("Upload both Employee Activity and Project Assignment files first")
     else:
         assignments = []
         for _, emp in df_emp.iterrows():
@@ -149,20 +187,17 @@ elif page=="📈 Analytics":
         st.info("Upload Employee Activity first")
     else:
         c1,c2 = st.columns(2)
-        # Scatter plot: Bench_Duration vs True_Utilization
-        if 'Bench_Duration' in df.columns:
-            scatter = alt.Chart(df).mark_circle(size=60).encode(
-                x='Bench_Duration',
-                y='True_Utilization',
-                color='Bench_Status',
-                tooltip=['Employee','Bench_Status','True_Utilization']
-            ).interactive()
-            c1.altair_chart(scatter, use_container_width=True)
-        # Dept utilization bar chart
+        bench_chart = alt.Chart(df).mark_circle(size=100).encode(
+            x='Bench_Duration',
+            y='True_Utilization',
+            color='Bench_Status',
+            tooltip=['Employee','Dept','Bench_Status','True_Utilization']
+        ).properties(height=300)
         dept_util = df.groupby('Dept')['True_Utilization'].mean().reset_index()
-        bar = alt.Chart(dept_util).mark_bar().encode(
+        dept_chart = alt.Chart(dept_util).mark_bar().encode(
             x='Dept',
             y='True_Utilization',
             color='Dept'
         ).properties(height=300)
-        c2.altair_chart(bar, use_container_width=True)
+        c1.altair_chart(bench_chart,use_container_width=True)
+        c2.altair_chart(dept_chart,use_container_width=True)

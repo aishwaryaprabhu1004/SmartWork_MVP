@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import altair as alt
-import os
 
 # ---------------- Page Config ----------------
 st.set_page_config(
@@ -10,26 +9,12 @@ st.set_page_config(
     layout="wide"
 )
 
-# ---------------- Session State ----------------
+# ---------------- SESSION STATE ----------------
 if 'activity' not in st.session_state: st.session_state['activity'] = pd.DataFrame()
 if 'skills' not in st.session_state: st.session_state['skills'] = pd.DataFrame()
 if 'projects' not in st.session_state: st.session_state['projects'] = pd.DataFrame()
-if 'role' not in st.session_state: st.session_state['role'] = "HR Head"
+if 'role' not in st.session_state: st.session_state['role'] = None
 if 'reportees' not in st.session_state: st.session_state['reportees'] = pd.DataFrame()
-
-# ---------------- Top Bar ----------------
-top_col1, top_col2 = st.columns([1, 3])
-with top_col1:
-    logo_path = "logo.png"
-    if os.path.exists(logo_path):
-        st.image(logo_path, width=250)  # Bigger logo
-
-# ---------------- Sidebar ----------------
-sidebar_items = ["🏠 Homepage", "🏠 Dashboard & Analytics", "🎯 Skill Recommendations", "🚀 Project Assignment", "📤 Upload Data"]
-if st.session_state['role'] == "Project Manager":
-    sidebar_items = ["🏠 Homepage", "🏠 Dashboard & Analytics", "🚀 Project Assignment", "📤 Upload Data"]
-
-page = st.sidebar.radio("Navigation", options=sidebar_items)
 
 # ---------------- Helper Functions ----------------
 def load_file(file):
@@ -45,110 +30,136 @@ def load_file(file):
     return pd.DataFrame()
 
 def calculate_utilization(df):
-    if df.empty: 
-        return df
+    if df.empty: return df
     df['Activity_Score'] = (
         0.4*df.get('Tasks_Completed',0) +
         0.3*df.get('Meetings_Duration',0) +
         0.2*df.get('Decisions_Made',0) +
         0.1*df.get('Docs_Updated',0)
     )
-    df['True_Utilization'] = (df['Activity_Score'] / df['Activity_Score'].max()) * 100
+    df['True_Utilization'] = (df['Activity_Score']/df['Activity_Score'].max())*100
     df['Bench_Status'] = df['True_Utilization'].apply(
         lambda x: "On Bench" if x<20 else ("Partially Utilized" if x<50 else "Fully Utilized")
     )
     return df
 
-# ---------------- Pages ----------------
-if page == "🏠 Homepage":
-    st.markdown("<h1 style='text-align: center; color: #2E3A59;'>SmartWork.AI</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align: center; font-size:20px; color: #4B4B4B;'>AI-powered tool for CHROs</p>", unsafe_allow_html=True)
+# ---------------- CUSTOM CSS ----------------
+st.markdown("""
+<style>
+/* Sidebar Width */
+[data-testid="stSidebar"] { width: 250px; }
+/* Sidebar Labels */
+.sidebar .sidebar-content div[role="radiogroup"] > label { font-size: 20px; padding: 12px 0; }
+/* Logo Styling */
+.logo {width: 180px; display:block; margin-bottom: 20px;}
+/* Homepage Styling */
+.homepage-title {font-size: 36px; font-weight: bold; margin-bottom: 5px;}
+.homepage-desc {font-size: 18px; color: #555; margin-bottom: 20px;}
+</style>
+""", unsafe_allow_html=True)
 
-    # Role selector below description
-    st.session_state['role'] = st.selectbox("Select your role:", ["HR Head", "Project Manager"], index=0, label_visibility="visible")
+# ---------------- SIDEBAR ----------------
+page = st.sidebar.radio(
+    "Navigation",
+    options=[
+        "🏠 Homepage",
+        "📤 Upload Data",
+        "🏠📈 Dashboard & Analytics",
+        "🎯 Skill Recommendations",
+        "🚀 Project Assignment"
+    ]
+)
+
+# ---------------- HOMEPAGE ----------------
+if page == "🏠 Homepage":
+    st.image("logo.png", width=200)  # Place your professional logo in the repo
+    st.markdown('<div class="homepage-title">SmartWork.AI</div>', unsafe_allow_html=True)
+    st.markdown('<div class="homepage-desc">The AI-powered tool for CHROs</div>', unsafe_allow_html=True)
 
     st.markdown("---")
-    st.markdown("""
-    ### Key Features
-    - 📊 **Dashboard & Analytics**: Real-time insights on utilization & performance.
-    - 🎯 **Skill Recommendations**: Identify skill gaps and upskilling suggestions.
-    - 🚀 **Project Assignment**: Intelligent project-employee matching.
-    - 📤 **Data Upload**: Manage employee, skill, and project data easily.
-    """)
+    role = st.selectbox("Select Role", ["HR Head", "Project Manager"], index=0)
+    st.session_state['role'] = role
 
+# ---------------- DATA UPLOAD ----------------
 elif page == "📤 Upload Data":
+    st.image("logo.png", width=200)
     st.subheader("Upload Data 📤")
-    col1, col2, col3 = st.columns([1,1,1])
-    with col1:
-        f1 = st.file_uploader("Employee Activity", type=["csv","xlsx"])
-        if f1: st.session_state['activity'] = load_file(f1)
-    with col2:
-        f2 = st.file_uploader("Skill Training", type=["csv","xlsx"])
-        if f2: st.session_state['skills'] = load_file(f2)
-    with col3:
-        f3 = st.file_uploader("Project Assignment", type=["csv","xlsx"])
-        if f3: st.session_state['projects'] = load_file(f3)
-    
-    # Project manager reportees file
-    if st.session_state['role'] == "Project Manager":
-        f4 = st.file_uploader("Your Reportees", type=["csv","xlsx"])
-        if f4: st.session_state['reportees'] = load_file(f4)
+    f1 = st.file_uploader("Employee Activity", type=["csv","xlsx"])
+    f2 = st.file_uploader("Skill Training", type=["csv","xlsx"])
+    f3 = st.file_uploader("Project Assignment", type=["csv","xlsx"])
+    f4 = st.file_uploader("Reportees (Project Manager Only)", type=["csv","xlsx"])
 
-elif page == "🏠 Dashboard & Analytics":
-    st.subheader("Dashboard & Analytics 🏠📈")
+    if st.button("Submit Uploads"):
+        if f1: st.session_state['activity'] = load_file(f1)
+        if f2: st.session_state['skills'] = load_file(f2)
+        if f3: st.session_state['projects'] = load_file(f3)
+        if f4: st.session_state['reportees'] = load_file(f4)
+        st.success("Files uploaded successfully!")
+
+# ---------------- DASHBOARD & ANALYTICS ----------------
+elif page == "🏠📈 Dashboard & Analytics":
+    st.image("logo.png", width=200)
+    st.markdown(f"**Role:** {st.session_state.get('role','Not selected')}", unsafe_allow_html=True)
+    
     df = calculate_utilization(st.session_state['activity'])
+    proj_df = st.session_state['projects']
+    skills_df = st.session_state['skills']
     
     if df.empty:
         st.info("Upload Employee Activity first")
     else:
-        # Filter for Project Manager role
-        if st.session_state['role'] == "Project Manager" and not st.session_state['reportees'].empty:
-            reportee_list = st.session_state['reportees']['Employee'].tolist()
-            df = df[df['Employee'].isin(reportee_list)]
+        role = st.session_state['role']
+        if role == "Project Manager" and not st.session_state['reportees'].empty:
+            df = df[df['Employee'].isin(st.session_state['reportees']['Employee'])]
         
-        # Bench Status Bar Chart
+        # Key Metrics
+        total_emp = len(df)
+        bench_count = len(df[df['Bench_Status']=="On Bench"])
+        part_util = len(df[df['Bench_Status']=="Partially Utilized"])
+        full_util = len(df[df['Bench_Status']=="Fully Utilized"])
+        k1,k2,k3,k4 = st.columns([1,1,1,1])
+        k1.metric("Total Employees", total_emp)
+        k2.metric("On Bench", bench_count)
+        k3.metric("Partial Utilization", part_util)
+        k4.metric("Full Utilization", full_util)
+        
+        # Bench Status Bar
         bench_chart = df['Bench_Status'].value_counts().reset_index()
         bench_chart.columns = ['Bench_Status','Count']
-        chart1 = alt.Chart(bench_chart).mark_bar().encode(
-            x='Bench_Status',
-            y='Count',
-            color='Bench_Status'
+        st.altair_chart(
+            alt.Chart(bench_chart).mark_bar().encode(
+                x='Bench_Status', y='Count', color='Bench_Status'
+            ), use_container_width=True
         )
-        st.altair_chart(chart1, use_container_width=True)
-
-        # Dept Utilization Bar Chart
+        
+        # Department Utilization
         dept_util = df.groupby('Dept')['True_Utilization'].mean().reset_index()
-        chart2 = alt.Chart(dept_util).mark_bar().encode(
-            x='Dept',
-            y='True_Utilization',
-            color='Dept'
+        st.altair_chart(
+            alt.Chart(dept_util).mark_line(point=True).encode(
+                x='Dept', y='True_Utilization', color='Dept'
+            ), use_container_width=True
         )
-        st.altair_chart(chart2, use_container_width=True)
-
-        # Line chart with connected points
-        line_chart = alt.Chart(df).mark_line(point=True).encode(
-            x='Employee',
-            y='True_Utilization',
-            color='Dept',
-            tooltip=['Employee','Dept','True_Utilization']
-        )
-        st.altair_chart(line_chart, use_container_width=True)
-
-        # AI Recommendations for HR Head only
-        if st.session_state['role'] == "HR Head":
-            st.subheader("AI Recommendations 🔹")
-            st.markdown("""
-            - Reallocate underutilized employees to high-demand projects.
-            - Upskill employees based on missing skills from upcoming projects.
-            - Optimize bench duration to reduce idle costs.
-            - Align project staffing to critical deadlines.
-            - Deploy cost-efficient contractors where utilization is low.
-            """)
-
+        
+        # HR Only AI Recommendations
+        if role == "HR Head":
+            st.subheader("AI Recommendations for HR Head 🔥")
+            # Example: Advanced logic could go here
+            recommendations = [
+                "Reallocate underutilized employees to high-priority projects.",
+                "Upskill employees with missing critical skills for upcoming projects.",
+                "Consider temporary bench reduction strategies to optimize billing.",
+                "Review high-cost projects and redistribute resources for efficiency."
+            ]
+            for rec in recommendations:
+                st.markdown(f"- {rec}")
+        
+        # Show Data Table
         st.dataframe(df[['Employee','Dept','Bench_Status','True_Utilization']], height=300)
 
+# ---------------- SKILL RECOMMENDATIONS ----------------
 elif page == "🎯 Skill Recommendations":
-    st.subheader("Skill Recommendations 🎯")
+    st.image("logo.png", width=200)
+    st.markdown(f"**Role:** {st.session_state.get('role','Not selected')}", unsafe_allow_html=True)
     df_emp = st.session_state['activity']
     df_skills = st.session_state['skills']
     if df_emp.empty or df_skills.empty: st.info("Upload both Employee Activity and Skills file first")
@@ -156,13 +167,15 @@ elif page == "🎯 Skill Recommendations":
         required_skills = df_skills['Skill'].unique().tolist()
         def rec(skills_str):
             emp_skills = str(skills_str).split(",") if pd.notnull(skills_str) else []
-            missing = list(set(required_skills) - set(emp_skills))
+            missing = list(set(required_skills)-set(emp_skills))
             return ", ".join(missing) if missing else "None"
         df_emp['Recommended_Skills'] = df_emp['Skills'].apply(rec)
         st.dataframe(df_emp[['Employee','Skills','Recommended_Skills','Bench_Status']], height=400)
 
+# ---------------- PROJECT ASSIGNMENT ----------------
 elif page == "🚀 Project Assignment":
-    st.subheader("Project Assignment 🚀")
+    st.image("logo.png", width=200)
+    st.markdown(f"**Role:** {st.session_state.get('role','Not selected')}", unsafe_allow_html=True)
     df_emp = st.session_state['activity']
     df_proj = st.session_state['projects']
     if df_emp.empty or df_proj.empty:
@@ -180,6 +193,7 @@ elif page == "🚀 Project Assignment":
                         'Skill_Match': ", ".join(emp_skills & proj_skills)
                     })
         st.dataframe(pd.DataFrame(assignments), height=400)
+
 
 
 

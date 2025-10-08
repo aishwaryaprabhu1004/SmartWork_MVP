@@ -16,17 +16,12 @@ if 'skills' not in st.session_state: st.session_state['skills'] = pd.DataFrame()
 if 'projects' not in st.session_state: st.session_state['projects'] = pd.DataFrame()
 if 'role' not in st.session_state: st.session_state['role'] = "HR Head"
 
-# ---------------- Top Layout ----------------
-# Create a two-column top bar: logo left, role selector right
+# ---------------- Top Bar ----------------
 top_col1, top_col2 = st.columns([1, 3])
 with top_col1:
     logo_path = "logo.png"
     if os.path.exists(logo_path):
-        st.image(logo_path, width=180)
-with top_col2:
-    st.session_state['role'] = st.selectbox("Role:", ["HR Head", "Project Manager"], index=0, label_visibility="collapsed")
-
-st.markdown("---")
+        st.image(logo_path, width=250)  # Bigger logo
 
 # ---------------- Sidebar ----------------
 sidebar_items = ["🏠 Homepage", "🏠 Dashboard & Analytics", "🎯 Skill Recommendations", "🚀 Project Assignment", "📤 Upload Data"]
@@ -65,12 +60,12 @@ def calculate_utilization(df):
 
 # ---------------- Pages ----------------
 if page == "🏠 Homepage":
-    st.markdown("<h1 style='text-align: center; color: #2E3A59;'>Welcome to SmartWork.AI</h1>", unsafe_allow_html=True)
-    st.markdown("""
-    <p style='text-align: center; font-size:18px; color: #4B4B4B;'>
-    A modern platform to optimize employee performance, project allocation, and skill development for HR Heads and Project Managers.
-    </p>
-    """, unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align: center; color: #2E3A59;'>SmartWork.AI</h1>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; font-size:20px; color: #4B4B4B;'>AI-powered tool for CHROs</p>", unsafe_allow_html=True)
+
+    # Role selector below description
+    st.session_state['role'] = st.selectbox("Select your role:", ["HR Head", "Project Manager"], index=0, label_visibility="visible")
+
     st.markdown("---")
     col1, col2, col3 = st.columns(3)
     col1.metric("Total Employees", "50")
@@ -189,6 +184,7 @@ elif page == "🚀 Project Assignment":
                         'Skill_Match': ", ".join(emp_skills & proj_skills)
                     })
         st.dataframe(pd.DataFrame(assignments), height=400)
+
 
 
 

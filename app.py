@@ -191,3 +191,4 @@ elif page=="🚀 Project Assignment":
                     })
         st.dataframe(pd.DataFrame(assignments), height=400)
 
+

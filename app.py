@@ -2,6 +2,9 @@ import streamlit as st
 import pandas as pd
 import altair as alt
 
+# ---------------- Increase File Upload Limit ----------------
+st.set_option('server.maxUploadSize', 1024)  # 1 GB limit
+
 # ---------------- Page Config ----------------
 st.set_page_config(
     page_title="SmartWork.AI",
@@ -50,24 +53,22 @@ if 'projects' not in st.session_state: st.session_state['projects'] = pd.DataFra
 
 # ---------------- Helper Functions ----------------
 def load_file(file):
-    if file:
-        if file.name.endswith(".csv"):
-            return pd.read_csv(file)
-        else:
-            return pd.read_excel(file)
+    if file: 
+        return pd.read_csv(file) if file.name.endswith(".csv") else pd.read_excel(file, engine='openpyxl')
     return pd.DataFrame()
 
 def calculate_utilization(df):
-    if df.empty:
+    if df.empty: 
         return df
-    # Rule-based AI heuristic scoring
+    # AI: Rule-based heuristic scoring
     df['Activity_Score'] = (
         0.4*df.get('Tasks_Completed',0) +
         0.3*df.get('Meetings_Duration',0) +
         0.2*df.get('Decisions_Made',0) +
         0.1*df.get('Docs_Updated',0)
     )
-    df['True_Utilization'] = (df['Activity_Score']/df['Activity_Score'].max())*100
+    # Manual normalization
+    df['True_Utilization'] = (df['Activity_Score'] / df['Activity_Score'].max()) * 100
     df['Bench_Status'] = df['True_Utilization'].apply(
         lambda x: "On Bench" if x<20 else ("Partially Utilized" if x<50 else "Fully Utilized")
     )
@@ -93,6 +94,7 @@ elif page=="🏠 Dashboard":
     if df.empty:
         st.info("Upload Employee Activity first")
     else:
+        # KPI cards
         total_emp = len(df)
         bench_count = len(df[df['Bench_Status']=="On Bench"])
         part_util = len(df[df['Bench_Status']=="Partially Utilized"])
@@ -106,25 +108,21 @@ elif page=="🏠 Dashboard":
         # Bench Status Chart
         bench_chart = df['Bench_Status'].value_counts().reset_index()
         bench_chart.columns = ['Bench_Status','Count']
-        st.altair_chart(
-            alt.Chart(bench_chart).mark_bar().encode(
-                x='Bench_Status',
-                y='Count',
-                color='Bench_Status'
-            ),
-            use_container_width=True
+        chart1 = alt.Chart(bench_chart).mark_bar().encode(
+            x='Bench_Status',
+            y='Count',
+            color='Bench_Status'
         )
+        st.altair_chart(chart1, use_container_width=True)
 
         # Department Utilization Chart
         dept_util = df.groupby('Dept')['True_Utilization'].mean().reset_index()
-        st.altair_chart(
-            alt.Chart(dept_util).mark_bar().encode(
-                x='Dept',
-                y='True_Utilization',
-                color='Dept'
-            ),
-            use_container_width=True
+        chart2 = alt.Chart(dept_util).mark_bar().encode(
+            x='Dept',
+            y='True_Utilization',
+            color='Dept'
         )
+        st.altair_chart(chart2, use_container_width=True)
 
         # Data Table
         st.dataframe(df[['Employee','Dept','Bench_Status','True_Utilization']], height=300)
@@ -141,13 +139,12 @@ elif page=="🎯 Skill Recommendations":
     st.subheader("Skill Recommendations 🎯")
     df_emp = st.session_state['activity']
     df_skills = st.session_state['skills']
-    if df_emp.empty or df_skills.empty:
-        st.info("Upload both Employee Activity and Skills file first")
+    if df_emp.empty or df_skills.empty: st.info("Upload both Employee Activity and Skills file first")
     else:
         required_skills = df_skills['Skill'].unique().tolist()
         def rec(skills_str):
             emp_skills = str(skills_str).split(",") if pd.notnull(skills_str) else []
-            missing = list(set(required_skills)-set(emp_skills))
+            missing = list(set(required_skills) - set(emp_skills))
             return ", ".join(missing) if missing else "None"
         df_emp['Recommended_Skills'] = df_emp['Skills'].apply(rec)
         st.dataframe(df_emp[['Employee','Skills','Recommended_Skills','Bench_Status']], height=400)
@@ -164,6 +161,8 @@ elif page=="🚀 Project Assignment":
             emp_skills = set(str(emp.get('Skills','')).split(","))
             for _, proj in df_proj.iterrows():
                 proj_skills = set(str(proj.get('Required_Skills','')).split(","))
+
+                # Skill match assignment
                 if emp_skills & proj_skills:
                     assignments.append({
                         'Employee': emp.get('Employee',''),
@@ -178,6 +177,7 @@ elif page=="📈 Analytics":
     if df.empty:
         st.info("Upload Employee Activity first")
     else:
+        # Scatter chart: Bench Duration vs Utilization
         if 'Bench_Duration' in df.columns:
             scatter_chart = alt.Chart(df).mark_circle(size=60).encode(
                 x='Bench_Duration',
@@ -187,12 +187,11 @@ elif page=="📈 Analytics":
             )
             st.altair_chart(scatter_chart, use_container_width=True)
 
+        # Department Bar Chart
         dept_util = df.groupby('Dept')['True_Utilization'].mean().reset_index()
-        st.altair_chart(
-            alt.Chart(dept_util).mark_bar().encode(
-                x='Dept',
-                y='True_Utilization',
-                color='Dept'
-            ),
-            use_container_width=True
+        bar_chart = alt.Chart(dept_util).mark_bar().encode(
+            x='Dept',
+            y='True_Utilization',
+            color='Dept'
         )
+        st.altair_chart(bar_chart, use_container_width=True)

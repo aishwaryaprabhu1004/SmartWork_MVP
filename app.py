@@ -9,24 +9,12 @@ st.set_page_config(
     layout="wide"
 )
 
-# ---------------- Role Selection ----------------
-if 'role' not in st.session_state:
-    st.session_state['role'] = None
-
-if st.session_state['role'] is None:
-    st.title("Welcome to SmartWork.AI")
-    role = st.radio("Select Your Role:", ["HR Head", "Project Manager"])
-    if st.button("Proceed"):
-        st.session_state['role'] = role
-    st.stop()  # Stop app until role is selected
-
-role = st.session_state['role']
-
 # ---------------- Session State ----------------
 if 'activity' not in st.session_state: st.session_state['activity'] = pd.DataFrame()
 if 'skills' not in st.session_state: st.session_state['skills'] = pd.DataFrame()
 if 'projects' not in st.session_state: st.session_state['projects'] = pd.DataFrame()
 if 'reportees' not in st.session_state: st.session_state['reportees'] = pd.DataFrame()
+if 'role' not in st.session_state: st.session_state['role'] = None
 
 # ---------------- Helper Functions ----------------
 def load_file(file):
@@ -70,47 +58,44 @@ def ai_recommendations(df, role):
             recs.append(f"Assign tasks matching {row['Employee']}'s skills to increase project output.")
     return recs
 
-# ---------------- Sidebar Pages ----------------
-available_pages = ["🏠 Dashboard & Analytics", "🪑 Bench Utilization", "🎯 Skill Recommendations", "🚀 Project Assignment", "📤 Upload Data"]
+# ---------------- File Upload ----------------
+st.sidebar.subheader("1️⃣ Upload Data")
+with st.sidebar.form("upload_form"):
+    f1 = st.file_uploader("Employee Activity", type=["csv","xlsx"])
+    f2 = st.file_uploader("Skill Training", type=["csv","xlsx"])
+    f3 = st.file_uploader("Project Assignment", type=["csv","xlsx"])
+    f4 = st.file_uploader("Reportees Mapping", type=["csv","xlsx"])
+    submitted = st.form_submit_button("Upload Files")
+    if submitted:
+        if f1: st.session_state['activity'] = load_file(f1)
+        if f2: st.session_state['skills'] = load_file(f2)
+        if f3: st.session_state['projects'] = load_file(f3)
+        if f4: st.session_state['reportees'] = load_file(f4)
+        st.success("Files uploaded successfully!")
 
-if role=="Project Manager":
-    # PMs can't upload all files except reportees
-    available_pages = ["🏠 Dashboard & Analytics", "🪑 Bench Utilization", "🎯 Skill Recommendations", "🚀 Project Assignment", "📤 Upload Reportees"]
+# ---------------- Role Selection ----------------
+st.sidebar.subheader("2️⃣ Select Role")
+role_options = ["HR Head", "Project Manager"]
+role = st.sidebar.selectbox("Current Role:", role_options, index=role_options.index(st.session_state['role']) if st.session_state['role'] else 0)
+st.session_state['role'] = role
 
+# ---------------- Sidebar Navigation ----------------
+available_pages = ["🏠 Dashboard & Analytics", "🪑 Bench Utilization", "🎯 Skill Recommendations", "🚀 Project Assignment"]
 page = st.sidebar.radio("Navigation", options=available_pages)
 
 # ---------------- Pages ----------------
-if page=="📤 Upload Data" or page=="📤 Upload Reportees":
-    st.subheader("Upload Data 📤")
-    with st.form("upload_form"):
-        if role=="HR Head":
-            f1 = st.file_uploader("Employee Activity", type=["csv","xlsx"])
-            f2 = st.file_uploader("Skill Training", type=["csv","xlsx"])
-            f3 = st.file_uploader("Project Assignment", type=["csv","xlsx"])
-            f4 = st.file_uploader("Reportees Mapping (for PM)", type=["csv","xlsx"])
-        else:
-            f4 = st.file_uploader("Reportees Mapping", type=["csv","xlsx"])
-        submitted = st.form_submit_button("Submit")
-        if submitted:
-            if role=="HR Head":
-                if f1: st.session_state['activity'] = load_file(f1)
-                if f2: st.session_state['skills'] = load_file(f2)
-                if f3: st.session_state['projects'] = load_file(f3)
-                if f4: st.session_state['reportees'] = load_file(f4)
-            else:
-                if f4: st.session_state['reportees'] = load_file(f4)
-            st.success("Files uploaded successfully!")
+df = calculate_utilization(st.session_state['activity'])
+reportees_df = st.session_state['reportees']
 
-elif page=="🏠 Dashboard & Analytics":
+# Filter for Project Manager
+if role=="Project Manager" and not reportees_df.empty:
+    pm_name = st.sidebar.selectbox("Select Your Name:", reportees_df['PM_Name'].unique())
+    emp_list = reportees_df[reportees_df['PM_Name']==pm_name]['Employee'].tolist()
+    df = df[df['Employee'].isin(emp_list)]
+
+# ---------------- Dashboard & Analytics ----------------
+if page=="🏠 Dashboard & Analytics":
     st.subheader("Dashboard & Analytics 🏠📈")
-    df = calculate_utilization(st.session_state['activity'])
-    reportees_df = st.session_state['reportees']
-
-    if role=="Project Manager" and not reportees_df.empty:
-        pm_name = st.selectbox("Select Your Name:", reportees_df['PM_Name'].unique())
-        emp_list = reportees_df[reportees_df['PM_Name']==pm_name]['Employee'].tolist()
-        df = df[df['Employee'].isin(emp_list)]
-
     if df.empty:
         st.info("Upload relevant data first")
     else:
@@ -163,4 +148,46 @@ elif page=="🏠 Dashboard & Analytics":
 
         st.dataframe(df[['Employee','Dept','Bench_Status','True_Utilization']], height=400)
 
-# Other pages (Bench Utilization, Skill Recommendations, Project Assignment) remain same as before.
+# ---------------- Bench Utilization ----------------
+elif page=="🪑 Bench Utilization":
+    st.subheader("Bench Utilization 🪑")
+    if df.empty:
+        st.info("Upload Employee Activity first")
+    else:
+        st.dataframe(df[['Employee','Dept','Bench_Status','True_Utilization']], height=400)
+
+# ---------------- Skill Recommendations ----------------
+elif page=="🎯 Skill Recommendations":
+    st.subheader("Skill Recommendations 🎯")
+    df_skills = st.session_state['skills']
+    if df.empty or df_skills.empty:
+        st.info("Upload both Employee Activity and Skills file first")
+    else:
+        required_skills = df_skills['Skill'].unique().tolist()
+        def rec(skills_str):
+            emp_skills = str(skills_str).split(",") if pd.notnull(skills_str) else []
+            missing = list(set(required_skills) - set(emp_skills))
+            return ", ".join(missing) if missing else "None"
+        df['Recommended_Skills'] = df['Skills'].apply(rec)
+        st.dataframe(df[['Employee','Skills','Recommended_Skills','Bench_Status']], height=400)
+
+# ---------------- Project Assignment ----------------
+elif page=="🚀 Project Assignment":
+    st.subheader("Project Assignment 🚀")
+    df_proj = st.session_state['projects']
+    if df.empty or df_proj.empty:
+        st.info("Upload Employee Activity and Project Assignment file first")
+    else:
+        assignments = []
+        for _, emp in df.iterrows():
+            emp_skills = set(str(emp.get('Skills','')).split(","))
+            for _, proj in df_proj.iterrows():
+                proj_skills = set(str(proj.get('Required_Skills','')).split(",")) if pd.notnull(proj.get('Required_Skills','')) else set()
+                if emp_skills & proj_skills:
+                    assignments.append({
+                        'Employee': emp.get('Employee',''),
+                        'Project': proj.get('Project_Name',''),
+                        'Skill_Match': ", ".join(emp_skills & proj_skills)
+                    })
+        st.dataframe(pd.DataFrame(assignments), height=400)
+

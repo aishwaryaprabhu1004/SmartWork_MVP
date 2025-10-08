@@ -16,6 +16,7 @@ st.markdown("""
 [data-testid="stSidebar"] {
     width: 250px;
 }
+
 /* Big icons, centered */
 .sidebar .sidebar-content {
     display: flex;
@@ -31,7 +32,7 @@ st.markdown("""
 
 # ---------------- Sidebar Icons ----------------
 page = st.sidebar.radio(
-    "Navigation",
+    "Menu",
     options=[
         "🏠 Dashboard",
         "🪑 Bench Utilization",
@@ -49,28 +50,25 @@ if 'projects' not in st.session_state: st.session_state['projects'] = pd.DataFra
 
 # ---------------- Helper Functions ----------------
 def load_file(file):
-    if file:
-        try:
-            if file.name.endswith(".csv"):
-                return pd.read_csv(file)
-            else:
-                return pd.read_excel(file, engine='openpyxl')
-        except ImportError:
-            st.error("openpyxl not installed. Please upload CSV instead.")
-            return pd.DataFrame()
+    if not file:
+        return pd.DataFrame()
+    if file.name.endswith(".csv"):
+        return pd.read_csv(file)
+    elif file.name.endswith((".xlsx", ".xls")):
+        return pd.read_excel(file, engine='openpyxl')
     return pd.DataFrame()
 
 def calculate_utilization(df):
-    if df.empty: 
+    if df.empty:
         return df
-    # Rule-based heuristic AI
+    # AI/heuristic scoring
     df['Activity_Score'] = (
         0.4*df.get('Tasks_Completed',0) +
         0.3*df.get('Meetings_Duration',0) +
         0.2*df.get('Decisions_Made',0) +
         0.1*df.get('Docs_Updated',0)
     )
-    df['True_Utilization'] = (df['Activity_Score'] / df['Activity_Score'].max()) * 100
+    df['True_Utilization'] = (df['Activity_Score']/df['Activity_Score'].max())*100
     df['Bench_Status'] = df['True_Utilization'].apply(
         lambda x: "On Bench" if x<20 else ("Partially Utilized" if x<50 else "Fully Utilized")
     )
@@ -100,33 +98,35 @@ elif page=="🏠 Dashboard":
         bench_count = len(df[df['Bench_Status']=="On Bench"])
         part_util = len(df[df['Bench_Status']=="Partially Utilized"])
         full_util = len(df[df['Bench_Status']=="Fully Utilized"])
-
         k1,k2,k3,k4 = st.columns([1,1,1,1])
         k1.metric("Total Employees", total_emp)
         k2.metric("On Bench", bench_count)
         k3.metric("Partial Utilization", part_util)
         k4.metric("Full Utilization", full_util)
 
-        # Bench Status Chart
+        # Bench chart
         bench_chart = df['Bench_Status'].value_counts().reset_index()
         bench_chart.columns = ['Bench_Status','Count']
-        chart1 = alt.Chart(bench_chart).mark_bar().encode(
-            x='Bench_Status',
-            y='Count',
-            color='Bench_Status'
+        st.altair_chart(
+            alt.Chart(bench_chart).mark_bar().encode(
+                x='Bench_Status',
+                y='Count',
+                color='Bench_Status'
+            ),
+            use_container_width=True
         )
-        st.altair_chart(chart1, use_container_width=True)
 
-        # Department Utilization Chart
+        # Dept utilization
         dept_util = df.groupby('Dept')['True_Utilization'].mean().reset_index()
-        chart2 = alt.Chart(dept_util).mark_bar().encode(
-            x='Dept',
-            y='True_Utilization',
-            color='Dept'
+        st.altair_chart(
+            alt.Chart(dept_util).mark_bar().encode(
+                x='Dept',
+                y='True_Utilization',
+                color='Dept'
+            ),
+            use_container_width=True
         )
-        st.altair_chart(chart2, use_container_width=True)
 
-        # Data Table
         st.dataframe(df[['Employee','Dept','Bench_Status','True_Utilization']], height=300)
 
 elif page=="🪑 Bench Utilization":
@@ -177,19 +177,26 @@ elif page=="📈 Analytics":
     if df.empty:
         st.info("Upload Employee Activity first")
     else:
+        # Scatter chart if Bench_Duration exists
         if 'Bench_Duration' in df.columns:
-            scatter_chart = alt.Chart(df).mark_circle(size=60).encode(
-                x='Bench_Duration',
-                y='True_Utilization',
-                color='Bench_Status',
-                tooltip=['Employee','Dept','Bench_Status','True_Utilization']
+            st.altair_chart(
+                alt.Chart(df).mark_circle(size=60).encode(
+                    x='Bench_Duration',
+                    y='True_Utilization',
+                    color='Bench_Status',
+                    tooltip=['Employee','Dept','Bench_Status','True_Utilization']
+                ),
+                use_container_width=True
             )
-            st.altair_chart(scatter_chart, use_container_width=True)
+        # Dept utilization bar
         dept_util = df.groupby('Dept')['True_Utilization'].mean().reset_index()
-        bar_chart = alt.Chart(dept_util).mark_bar().encode(
-            x='Dept',
-            y='True_Utilization',
-            color='Dept'
+        st.altair_chart(
+            alt.Chart(dept_util).mark_bar().encode(
+                x='Dept',
+                y='True_Utilization',
+                color='Dept'
+            ),
+            use_container_width=True
         )
-        st.altair_chart(bar_chart, use_container_width=True)
+
 

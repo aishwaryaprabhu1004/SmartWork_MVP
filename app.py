@@ -8,10 +8,10 @@ st.set_page_config(
     layout="wide"
 )
 
-# ---------------- Sidebar with Icons ----------------
-st.sidebar.markdown("## SmartWork.AI")
+# ---------------- Sidebar Icons ----------------
+st.sidebar.markdown("## 💡 SmartWork.AI")
 page = st.sidebar.radio(
-    "Navigation",
+    "",
     options=[
         "🏠 Dashboard",
         "🪑 Bench Utilization",
@@ -87,19 +87,22 @@ def plot_scatter(df, x, y, color):
 # ---------------- Pages ----------------
 if page=="📤 Upload Data":
     st.header("Upload Data 📤")
-    activity_file = st.file_uploader("Employee Activity File", type=["csv","xlsx"])
-    skills_file = st.file_uploader("Skill Training File", type=["csv","xlsx"])
-    projects_file = st.file_uploader("Project Assignment File", type=["csv","xlsx"])
-    
-    if activity_file:
-        st.session_state['activity'] = load_file(activity_file)
-        st.success("✅ Employee Activity uploaded")
-    if skills_file:
-        st.session_state['skills'] = load_file(skills_file)
-        st.success("✅ Skill Training uploaded")
-    if projects_file:
-        st.session_state['projects'] = load_file(projects_file)
-        st.success("✅ Project Assignments uploaded")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        activity_file = st.file_uploader("Employee Activity", type=["csv","xlsx"])
+        if activity_file:
+            st.session_state['activity'] = load_file(activity_file)
+            st.success("✅ Employee Activity uploaded")
+    with col2:
+        skills_file = st.file_uploader("Skill Training", type=["csv","xlsx"])
+        if skills_file:
+            st.session_state['skills'] = load_file(skills_file)
+            st.success("✅ Skill Training uploaded")
+    with col3:
+        projects_file = st.file_uploader("Project Assignment", type=["csv","xlsx"])
+        if projects_file:
+            st.session_state['projects'] = load_file(projects_file)
+            st.success("✅ Project Assignments uploaded")
 
 elif page=="🏠 Dashboard":
     st.header("Dashboard 🏠")
@@ -107,21 +110,24 @@ elif page=="🏠 Dashboard":
     if df.empty:
         st.info("Upload Employee Activity first")
     else:
-        # KPI Cards
+        # KPI Cards compact layout
         total_emp = len(df)
         bench_count = len(df[df['Bench_Status']=="On Bench"])
         part_util = len(df[df['Bench_Status']=="Partially Utilized"])
         full_util = len(df[df['Bench_Status']=="Fully Utilized"])
-        col1, col2, col3, col4 = st.columns(4)
-        col1.metric("Total Employees", total_emp)
-        col2.metric("On Bench", bench_count)
-        col3.metric("Partial Utilization", part_util)
-        col4.metric("Full Utilization", full_util)
+        kpi_col1, kpi_col2, kpi_col3, kpi_col4 = st.columns(4)
+        kpi_col1.metric("Total Employees", total_emp)
+        kpi_col2.metric("On Bench", bench_count)
+        kpi_col3.metric("Partial Utilization", part_util)
+        kpi_col4.metric("Full Utilization", full_util)
         
-        # Bench Chart
+        # Charts side by side
         bench_chart = df['Bench_Status'].value_counts().reset_index()
         bench_chart.columns = ['Bench Status','Count']
-        st.plotly_chart(plot_bar(bench_chart,'Bench Status','Count','Bench Status'), use_container_width=True)
+        chart_col1, chart_col2 = st.columns(2)
+        chart_col1.plotly_chart(plot_bar(bench_chart,'Bench Status','Count','Bench Status'), use_container_width=True)
+        dept_util = df.groupby('Dept')['True_Utilization'].mean().reset_index()
+        chart_col2.plotly_chart(plot_bar(dept_util,'Dept','True_Utilization','Dept'), use_container_width=True)
 
 elif page=="🪑 Bench Utilization":
     st.header("Bench Utilization 🪑")
@@ -129,7 +135,7 @@ elif page=="🪑 Bench Utilization":
     if df.empty:
         st.info("Upload Employee Activity first")
     else:
-        st.dataframe(df[['Employee','Dept','Bench_Status','True_Utilization']])
+        st.dataframe(df[['Employee','Dept','Bench_Status','True_Utilization']], height=450)
 
 elif page=="🎯 Skill Recommendations":
     st.header("Skill Recommendations 🎯")
@@ -137,7 +143,7 @@ elif page=="🎯 Skill Recommendations":
     if df.empty:
         st.info("Upload Employee Activity and Skills file first")
     else:
-        st.dataframe(df[['Employee','Skills','Recommended_Skills','Bench_Status']])
+        st.dataframe(df[['Employee','Skills','Recommended_Skills','Bench_Status']], height=450)
 
 elif page=="🚀 Project Assignment":
     st.header("Project Assignment 🚀")
@@ -145,7 +151,7 @@ elif page=="🚀 Project Assignment":
     if df.empty:
         st.info("Upload Employee Activity and Projects file first")
     else:
-        st.dataframe(df)
+        st.dataframe(df, height=450)
 
 elif page=="📈 Analytics":
     st.header("Analytics 📈")
@@ -153,8 +159,8 @@ elif page=="📈 Analytics":
     if df.empty:
         st.info("Upload Employee Activity first")
     else:
-        # Utilization vs Bench Duration
-        st.plotly_chart(plot_scatter_chart(df,'Bench_Duration','True_Utilization','Bench_Status'), use_container_width=True)
-        # Department avg utilization
+        # Grid layout for analytics
+        col1, col2 = st.columns(2)
+        col1.plotly_chart(plot_scatter(df,'Bench_Duration','True_Utilization','Bench_Status'), use_container_width=True)
         dept_util = df.groupby('Dept')['True_Utilization'].mean().reset_index()
-        st.plotly_chart(plot_bar(dept_util,'Dept','True_Utilization','Dept'), use_container_width=True)
+        col2.plotly_chart(plot_bar(dept_util,'Dept','True_Utilization','Dept'), use_container_width=True)

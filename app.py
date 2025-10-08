@@ -16,17 +16,17 @@ if 'skills' not in st.session_state: st.session_state['skills'] = pd.DataFrame()
 if 'projects' not in st.session_state: st.session_state['projects'] = pd.DataFrame()
 if 'role' not in st.session_state: st.session_state['role'] = "HR Head"
 
-# ---------------- Persistent Logo ----------------
-logo_path = "logo.png"
-if os.path.exists(logo_path):
-    st.image(logo_path, width=200)
-st.markdown("---")
+# ---------------- Top Layout ----------------
+# Create a two-column top bar: logo left, role selector right
+top_col1, top_col2 = st.columns([1, 3])
+with top_col1:
+    logo_path = "logo.png"
+    if os.path.exists(logo_path):
+        st.image(logo_path, width=180)
+with top_col2:
+    st.session_state['role'] = st.selectbox("Role:", ["HR Head", "Project Manager"], index=0, label_visibility="collapsed")
 
-# ---------------- Role Selector ----------------
-roles = ["HR Head", "Project Manager"]
-st.session_state['role'] = st.selectbox(
-    "Select Role:", roles, index=roles.index(st.session_state['role'])
-)
+st.markdown("---")
 
 # ---------------- Sidebar ----------------
 sidebar_items = ["🏠 Homepage", "🏠 Dashboard & Analytics", "🎯 Skill Recommendations", "🚀 Project Assignment", "📤 Upload Data"]
@@ -65,40 +65,38 @@ def calculate_utilization(df):
 
 # ---------------- Pages ----------------
 if page == "🏠 Homepage":
-    st.markdown("## Welcome to SmartWork.AI")
+    st.markdown("<h1 style='text-align: center; color: #2E3A59;'>Welcome to SmartWork.AI</h1>", unsafe_allow_html=True)
     st.markdown("""
-    **SmartWork.AI** is a professional platform designed to optimize employee performance, project allocation, and skill development.
-    
-    ### Key Features:
-    - 📊 **Dashboard & Analytics:** Real-time insights on employee utilization and performance.
-    - 🎯 **Skill Recommendations:** Identify skill gaps and recommended upskilling.
-    - 🚀 **Project Assignment:** Intelligent project-employee matching based on skills.
-    - 📤 **Data Upload:** Easily upload and manage employee, skill, and project data.
-    
-    ### Benefits:
-    - Maximize employee productivity
-    - Reduce bench costs
-    - Improve project delivery efficiency
-    - Data-driven decision-making for HR Heads and Project Managers
-    """)
+    <p style='text-align: center; font-size:18px; color: #4B4B4B;'>
+    A modern platform to optimize employee performance, project allocation, and skill development for HR Heads and Project Managers.
+    </p>
+    """, unsafe_allow_html=True)
     st.markdown("---")
-    st.info("Use the sidebar to navigate through the application features.")
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Total Employees", "50")
+    col2.metric("Projects Ongoing", "12")
+    col3.metric("Bench Employees", "3")
+    st.markdown("---")
+    st.markdown("""
+    ### Key Features
+    - 📊 **Dashboard & Analytics**: Real-time insights on utilization & performance.
+    - 🎯 **Skill Recommendations**: Identify skill gaps and upskilling suggestions.
+    - 🚀 **Project Assignment**: Intelligent project-employee matching.
+    - 📤 **Data Upload**: Manage employee, skill, and project data easily.
+    """)
 
 elif page == "📤 Upload Data":
     st.subheader("Upload Data 📤")
     col1, col2, col3 = st.columns([1,1,1])
     with col1:
         f1 = st.file_uploader("Employee Activity", type=["csv","xlsx"])
-        if f1:
-            st.session_state['activity'] = load_file(f1)
+        if f1: st.session_state['activity'] = load_file(f1)
     with col2:
         f2 = st.file_uploader("Skill Training", type=["csv","xlsx"])
-        if f2:
-            st.session_state['skills'] = load_file(f2)
+        if f2: st.session_state['skills'] = load_file(f2)
     with col3:
         f3 = st.file_uploader("Project Assignment", type=["csv","xlsx"])
-        if f3:
-            st.session_state['projects'] = load_file(f3)
+        if f3: st.session_state['projects'] = load_file(f3)
 
 elif page == "🏠 Dashboard & Analytics":
     st.subheader("Dashboard & Analytics 🏠📈")
@@ -106,18 +104,18 @@ elif page == "🏠 Dashboard & Analytics":
     if df.empty:
         st.info("Upload Employee Activity first")
     else:
+        # KPIs
         total_emp = len(df)
         bench_count = len(df[df['Bench_Status']=="On Bench"])
         part_util = len(df[df['Bench_Status']=="Partially Utilized"])
         full_util = len(df[df['Bench_Status']=="Fully Utilized"])
-
         k1,k2,k3,k4 = st.columns([1,1,1,1])
         k1.metric("Total Employees", total_emp)
         k2.metric("On Bench", bench_count)
         k3.metric("Partial Utilization", part_util)
         k4.metric("Full Utilization", full_util)
 
-        # Bench Status Chart
+        # Bench Status Bar Chart
         bench_chart = df['Bench_Status'].value_counts().reset_index()
         bench_chart.columns = ['Bench_Status','Count']
         chart1 = alt.Chart(bench_chart).mark_bar().encode(
@@ -127,7 +125,7 @@ elif page == "🏠 Dashboard & Analytics":
         )
         st.altair_chart(chart1, use_container_width=True)
 
-        # Department Utilization Chart
+        # Dept Utilization Bar Chart
         dept_util = df.groupby('Dept')['True_Utilization'].mean().reset_index()
         chart2 = alt.Chart(dept_util).mark_bar().encode(
             x='Dept',
@@ -136,7 +134,7 @@ elif page == "🏠 Dashboard & Analytics":
         )
         st.altair_chart(chart2, use_container_width=True)
 
-        # Line graph for utilization trends (connected points)
+        # Line chart with connected points
         line_chart = alt.Chart(df).mark_line(point=True).encode(
             x='Employee',
             y='True_Utilization',
@@ -145,18 +143,17 @@ elif page == "🏠 Dashboard & Analytics":
         )
         st.altair_chart(line_chart, use_container_width=True)
 
-        # AI Recommendations for HR Head only
+        # AI Recommendations for HR Head
         if st.session_state['role'] == "HR Head":
-            st.subheader("AI Recommendations")
+            st.subheader("AI Recommendations 🔹")
             st.markdown("""
-            - 🔹 Reallocate underutilized employees to high-demand projects.
-            - 🔹 Upskill employees on missing skills from upcoming projects.
-            - 🔹 Consider optimizing bench duration to reduce idle costs.
-            - 🔹 Align project staffing to match critical deadlines.
-            - 🔹 Deploy cost-efficient contractors where utilization is low.
+            - Reallocate underutilized employees to high-demand projects.
+            - Upskill employees based on missing skills from upcoming projects.
+            - Optimize bench duration to reduce idle costs.
+            - Align project staffing to critical deadlines.
+            - Deploy cost-efficient contractors where utilization is low.
             """)
 
-        # Data Table
         st.dataframe(df[['Employee','Dept','Bench_Status','True_Utilization']], height=300)
 
 elif page == "🎯 Skill Recommendations":
@@ -192,5 +189,6 @@ elif page == "🚀 Project Assignment":
                         'Skill_Match': ", ".join(emp_skills & proj_skills)
                     })
         st.dataframe(pd.DataFrame(assignments), height=400)
+
 
 

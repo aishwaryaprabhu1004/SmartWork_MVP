@@ -9,30 +9,40 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("SmartWork.AI MVP")
+# ---------------- Custom Sidebar ----------------
+st.markdown("""
+<style>
+[data-testid="stSidebar"] { width: 220px; }
+.sidebar .sidebar-content { display: flex; flex-direction: column; align-items: flex-start; }
+.sidebar .sidebar-content div[role="radiogroup"] > label { font-size: 18px; padding: 10px 0; }
+</style>
+""", unsafe_allow_html=True)
 
-# ---------------- Sidebar ----------------
+# ---------------- Sidebar Icons ----------------
 page = st.sidebar.radio(
-    "Navigation",
+    "",
     options=[
         "🏠 Dashboard",
-        "📤 Upload Data"
+        "🪑 Bench Utilization",
+        "🎯 Skill Recommendations",
+        "🚀 Project Assignment",
+        "📤 Upload Data",
+        "📈 Analytics"
     ]
 )
 
 # ---------------- Session State ----------------
-if 'activity' not in st.session_state:
-    st.session_state['activity'] = pd.DataFrame()
+if 'activity' not in st.session_state: st.session_state['activity'] = pd.DataFrame()
+if 'skills' not in st.session_state: st.session_state['skills'] = pd.DataFrame()
+if 'projects' not in st.session_state: st.session_state['projects'] = pd.DataFrame()
 
 # ---------------- Helper Functions ----------------
 def load_file(file):
-    if file:
-        return pd.read_csv(file) if file.name.endswith(".csv") else pd.read_excel(file)
+    if file: return pd.read_csv(file) if file.name.endswith(".csv") else pd.read_excel(file)
     return pd.DataFrame()
 
 def calculate_utilization(df):
-    if df.empty:
-        return df
+    if df.empty: return df
     df['Activity_Score'] = (
         0.4*df.get('Tasks_Completed',0) +
         0.3*df.get('Meetings_Duration',0) +
@@ -46,14 +56,20 @@ def calculate_utilization(df):
     return df
 
 # ---------------- Pages ----------------
-if page == "📤 Upload Data":
+if page=="📤 Upload Data":
     st.subheader("Upload Data 📤")
-    uploaded_file = st.file_uploader("Upload Employee Activity CSV/XLSX", type=["csv","xlsx"])
-    if uploaded_file:
-        st.session_state['activity'] = load_file(uploaded_file)
-        st.success("File uploaded successfully!")
+    col1, col2, col3 = st.columns([1,1,1])
+    with col1:
+        f1 = st.file_uploader("Employee Activity", type=["csv","xlsx"])
+        if f1: st.session_state['activity'] = load_file(f1)
+    with col2:
+        f2 = st.file_uploader("Skill Training", type=["csv","xlsx"])
+        if f2: st.session_state['skills'] = load_file(f2)
+    with col3:
+        f3 = st.file_uploader("Project Assignment", type=["csv","xlsx"])
+        if f3: st.session_state['projects'] = load_file(f3)
 
-elif page == "🏠 Dashboard":
+elif page=="🏠 Dashboard":
     st.subheader("Dashboard 🏠")
     df = calculate_utilization(st.session_state['activity'])
     if df.empty:
@@ -81,5 +97,72 @@ elif page == "🏠 Dashboard":
         ).properties(width=400, height=300)
         st.altair_chart(chart, use_container_width=True)
 
-        # Table
         st.dataframe(df[['Employee','Dept','Bench_Status','True_Utilization']], height=300)
+
+elif page=="🪑 Bench Utilization":
+    st.subheader("Bench Utilization 🪑")
+    df = calculate_utilization(st.session_state['activity'])
+    if df.empty:
+        st.info("Upload Employee Activity first")
+    else:
+        st.dataframe(df[['Employee','Dept','Bench_Status','True_Utilization']], height=400)
+
+elif page=="🎯 Skill Recommendations":
+    st.subheader("Skill Recommendations 🎯")
+    df_emp = st.session_state['activity']
+    df_skills = st.session_state['skills']
+    if df_emp.empty or df_skills.empty:
+        st.info("Upload both Employee Activity and Skills file first")
+    else:
+        required_skills = df_skills['Skill'].unique().tolist()
+        def rec(skills_str):
+            emp_skills = str(skills_str).split(",") if pd.notnull(skills_str) else []
+            missing = list(set(required_skills) - set(emp_skills))
+            return ", ".join(missing) if missing else "None"
+        df_emp['Recommended_Skills'] = df_emp['Skills'].apply(rec)
+        st.dataframe(df_emp[['Employee','Skills','Recommended_Skills','Bench_Status']], height=400)
+
+elif page=="🚀 Project Assignment":
+    st.subheader("Project Assignment 🚀")
+    df_emp = st.session_state['activity']
+    df_proj = st.session_state['projects']
+    if df_emp.empty or df_proj.empty:
+        st.info("Upload both Employee Activity and Project Assignment first")
+    else:
+        assignments = []
+        for _, emp in df_emp.iterrows():
+            emp_skills = set(str(emp.get('Skills','')).split(","))
+            for _, proj in df_proj.iterrows():
+                proj_skills = set(str(proj.get('Required_Skills','')).split(","))
+                if emp_skills & proj_skills:
+                    assignments.append({
+                        'Employee': emp.get('Employee',''),
+                        'Project': proj.get('Project_Name',''),
+                        'Skill_Match': ", ".join(emp_skills & proj_skills)
+                    })
+        st.dataframe(pd.DataFrame(assignments), height=400)
+
+elif page=="📈 Analytics":
+    st.subheader("Analytics 📈")
+    df = calculate_utilization(st.session_state['activity'])
+    if df.empty:
+        st.info("Upload Employee Activity first")
+    else:
+        c1,c2 = st.columns(2)
+        # Scatter plot: Bench_Duration vs True_Utilization
+        if 'Bench_Duration' in df.columns:
+            scatter = alt.Chart(df).mark_circle(size=60).encode(
+                x='Bench_Duration',
+                y='True_Utilization',
+                color='Bench_Status',
+                tooltip=['Employee','Bench_Status','True_Utilization']
+            ).interactive()
+            c1.altair_chart(scatter, use_container_width=True)
+        # Dept utilization bar chart
+        dept_util = df.groupby('Dept')['True_Utilization'].mean().reset_index()
+        bar = alt.Chart(dept_util).mark_bar().encode(
+            x='Dept',
+            y='True_Utilization',
+            color='Dept'
+        ).properties(height=300)
+        c2.altair_chart(bar, use_container_width=True)

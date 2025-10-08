@@ -24,18 +24,22 @@ def load_file(file):
     return pd.DataFrame()
 
 def process_utilization(df):
-    df['Effective_Meeting_Hours'] = df['Meetings_Duration']*0.8 + df['Decisions_Made']*0.2
+    if df.empty:
+        return df
+    df['Effective_Meeting_Hours'] = df.get('Meetings_Duration', 0)*0.8 + df.get('Decisions_Made',0)*0.2
     df['Activity_Score'] = (
-        0.35*df['Tasks_Completed'] +
+        0.35*df.get('Tasks_Completed',0) +
         0.25*df['Effective_Meeting_Hours'] +
-        0.2*df['Docs_Updated'] +
-        0.2*df['Decisions_Made']
+        0.2*df.get('Docs_Updated',0) +
+        0.2*df.get('Decisions_Made',0)
     )
     df['True_Utilization'] = (df['Activity_Score']/df['Activity_Score'].max())*100
     df['Bench_Status'] = df['True_Utilization'].apply(lambda x: "On Bench" if x<20 else ("Partially Utilized" if x<50 else "Fully Utilized"))
     return df
 
 def recommend_skills(df_emp, df_skills):
+    if df_emp.empty or df_skills.empty:
+        return df_emp
     high_demand_skills = df_skills['Skill'].tolist()
     def rec(skills_str):
         emp_skills = [s.strip() for s in str(skills_str).split(",")]
@@ -45,15 +49,17 @@ def recommend_skills(df_emp, df_skills):
     return df_emp
 
 def assign_projects(df_emp, df_proj):
+    if df_emp.empty or df_proj.empty:
+        return pd.DataFrame()
     assignments = []
     for idx, emp in df_emp.iterrows():
-        emp_skills = set(str(emp['Skills']).split(","))
+        emp_skills = set(str(emp.get('Skills','')).split(","))
         for _, proj in df_proj.iterrows():
-            proj_skills = set(str(proj['Required_Skills']).split(","))
+            proj_skills = set(str(proj.get('Required_Skills','')).split(","))
             if emp_skills & proj_skills:
                 assignments.append({
-                    'Employee': emp['Employee'],
-                    'Project': proj['Project_Name'],
+                    'Employee': emp.get('Employee',''),
+                    'Project': proj.get('Project_Name',''),
                     'Skill_Match': ", ".join(emp_skills & proj_skills)
                 })
     return pd.DataFrame(assignments)
@@ -145,3 +151,4 @@ elif page=="Analytics":
         st.plotly_chart(fig2)
     else:
         st.info("Upload Employee Activity first.")
+

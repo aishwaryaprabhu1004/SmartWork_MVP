@@ -12,24 +12,15 @@ st.set_page_config(
 # ---------------- Custom Sidebar ----------------
 st.markdown("""
 <style>
-/* Make sidebar wider */
-[data-testid="stSidebar"] {
-    width: 250px;
-}
-/* Big icons, centered */
-.sidebar .sidebar-content {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-}
-.sidebar .sidebar-content div[role="radiogroup"] > label {
-    font-size: 22px;
-    padding: 15px 0;
-}
+[data-testid="stSidebar"] { width: 250px; }
+.sidebar .sidebar-content { display: flex; flex-direction: column; align-items: center; }
+.sidebar .sidebar-content div[role="radiogroup"] > label { font-size: 22px; padding: 15px 0; }
 </style>
 """, unsafe_allow_html=True)
 
-# ---------------- Sidebar Icons ----------------
+# ---------------- Sidebar: Role and Navigation ----------------
+role = st.sidebar.selectbox("Select Role", ["HR Head", "Project Manager"])
+
 page = st.sidebar.radio(
     "Navigation",
     options=[
@@ -45,6 +36,7 @@ page = st.sidebar.radio(
 if 'activity' not in st.session_state: st.session_state['activity'] = pd.DataFrame()
 if 'skills' not in st.session_state: st.session_state['skills'] = pd.DataFrame()
 if 'projects' not in st.session_state: st.session_state['projects'] = pd.DataFrame()
+if 'files_uploaded' not in st.session_state: st.session_state['files_uploaded'] = False
 
 # ---------------- Helper Functions ----------------
 def load_file(file):
@@ -60,9 +52,8 @@ def load_file(file):
     return pd.DataFrame()
 
 def calculate_utilization(df):
-    if df.empty: 
+    if df.empty:
         return df
-    # Rule-based heuristic AI
     df['Activity_Score'] = (
         0.4*df.get('Tasks_Completed',0) +
         0.3*df.get('Meetings_Duration',0) +
@@ -75,26 +66,36 @@ def calculate_utilization(df):
     )
     return df
 
-# ---------------- Pages ----------------
+# ---------------- Upload Page ----------------
 if page=="📤 Upload Data":
     st.subheader("Upload Data 📤")
     col1, col2, col3 = st.columns([1,1,1])
     with col1:
         f1 = st.file_uploader("Employee Activity", type=["csv","xlsx"])
-        if f1: st.session_state['activity'] = load_file(f1)
     with col2:
         f2 = st.file_uploader("Skill Training", type=["csv","xlsx"])
-        if f2: st.session_state['skills'] = load_file(f2)
     with col3:
         f3 = st.file_uploader("Project Assignment", type=["csv","xlsx"])
+    
+    if st.button("Submit"):
+        if f1: st.session_state['activity'] = load_file(f1)
+        if f2: st.session_state['skills'] = load_file(f2)
         if f3: st.session_state['projects'] = load_file(f3)
+        st.session_state['files_uploaded'] = True
+        st.success("Files processed successfully!")
 
+# ---------------- Dashboard & Analytics ----------------
 elif page=="🏠 Dashboard & Analytics":
-    st.subheader("Dashboard & Analytics 🏠")
+    st.subheader("Dashboard & Analytics 🏠📈")
     df = calculate_utilization(st.session_state['activity'])
     if df.empty:
         st.info("Upload Employee Activity first")
     else:
+        # Role-based filtering
+        if role == "Project Manager":
+            # Example: filter by manager's team (assuming 'Manager' column exists)
+            df = df[df.get('Manager', '') == 'Your Name']  # replace with dynamic assignment if needed
+
         # KPI cards
         total_emp = len(df)
         bench_count = len(df[df['Bench_Status']=="On Bench"])
@@ -106,7 +107,7 @@ elif page=="🏠 Dashboard & Analytics":
         k3.metric("Partial Utilization", part_util)
         k4.metric("Full Utilization", full_util)
 
-        # Bench Status Chart
+        # Bench Status Bar Chart
         bench_chart = df['Bench_Status'].value_counts().reset_index()
         bench_chart.columns = ['Bench_Status','Count']
         chart1 = alt.Chart(bench_chart).mark_bar().encode(
@@ -116,28 +117,40 @@ elif page=="🏠 Dashboard & Analytics":
         )
         st.altair_chart(chart1, use_container_width=True)
 
-        # Department Utilization Chart
+        # Bench Status Pie Chart
+        chart2 = alt.Chart(bench_chart).mark_arc(innerRadius=50).encode(
+            theta='Count',
+            color='Bench_Status',
+            tooltip=['Bench_Status','Count']
+        )
+        st.altair_chart(chart2, use_container_width=True)
+
+        # Department Utilization Line Chart
         dept_util = df.groupby('Dept')['True_Utilization'].mean().reset_index()
-        chart2 = alt.Chart(dept_util).mark_bar().encode(
+        chart3 = alt.Chart(dept_util).mark_line(point=True).encode(
             x='Dept',
             y='True_Utilization',
             color='Dept'
         )
-        st.altair_chart(chart2, use_container_width=True)
+        st.altair_chart(chart3, use_container_width=True)
 
-        # Scatter Chart: Bench Duration vs Utilization
-        if 'Bench_Duration' in df.columns:
-            scatter_chart = alt.Chart(df).mark_circle(size=60).encode(
-                x='Bench_Duration',
-                y='True_Utilization',
-                color='Bench_Status',
-                tooltip=['Employee','Dept','Bench_Status','True_Utilization']
-            )
-            st.altair_chart(scatter_chart, use_container_width=True)
+        # Stacked Bar: Project vs Utilization (if projects loaded)
+        if not st.session_state['projects'].empty:
+            proj_df = st.session_state['projects']
+            merged = pd.merge(df, proj_df, left_on='Employee', right_on='Assigned_Employee', how='left')
+            if not merged.empty:
+                stacked = merged.groupby(['Project_Name','Bench_Status']).size().reset_index(name='Count')
+                chart4 = alt.Chart(stacked).mark_bar().encode(
+                    x='Project_Name',
+                    y='Count',
+                    color='Bench_Status'
+                )
+                st.altair_chart(chart4, use_container_width=True)
 
         # Data Table
         st.dataframe(df[['Employee','Dept','Bench_Status','True_Utilization']], height=300)
 
+# ---------------- Bench Utilization ----------------
 elif page=="🪑 Bench Utilization":
     st.subheader("Bench Utilization 🪑")
     df = calculate_utilization(st.session_state['activity'])
@@ -146,6 +159,7 @@ elif page=="🪑 Bench Utilization":
     else:
         st.dataframe(df[['Employee','Dept','Bench_Status','True_Utilization']], height=400)
 
+# ---------------- Skill Recommendations ----------------
 elif page=="🎯 Skill Recommendations":
     st.subheader("Skill Recommendations 🎯")
     df_emp = st.session_state['activity']
@@ -160,6 +174,7 @@ elif page=="🎯 Skill Recommendations":
         df_emp['Recommended_Skills'] = df_emp['Skills'].apply(rec)
         st.dataframe(df_emp[['Employee','Skills','Recommended_Skills','Bench_Status']], height=400)
 
+# ---------------- Project Assignment ----------------
 elif page=="🚀 Project Assignment":
     st.subheader("Project Assignment 🚀")
     df_emp = st.session_state['activity']
@@ -170,19 +185,18 @@ elif page=="🚀 Project Assignment":
         assignments = []
         for _, emp in df_emp.iterrows():
             emp_skills = set(str(emp.get('Skills','')).split(","))
+            matched_projects = []
             for _, proj in df_proj.iterrows():
                 proj_skills = set(str(proj.get('Required_Skills','')).split(","))
-
-                # Assign only matching skills for this person
-                skill_match = emp_skills & proj_skills
-                if skill_match:
-                    assignments.append({
+                if emp_skills & proj_skills:
+                    matched_projects.append({
                         'Employee': emp.get('Employee',''),
                         'Project': proj.get('Project_Name',''),
-                        'Skill_Match': ", ".join(skill_match)
+                        'Skill_Match': ", ".join(emp_skills & proj_skills)
                     })
-
+            assignments.extend(matched_projects)
         st.dataframe(pd.DataFrame(assignments), height=400)
+
 
 
 

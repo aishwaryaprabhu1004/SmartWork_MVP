@@ -85,22 +85,22 @@ if st.session_state['role']=="HR Head":
     page = st.sidebar.radio(
         "",
         options=[
-            "🏠 Dashboard & Analytics",
-            "📤 Upload Data",
-            "🪑 Bench Utilization",
-            "🎯 Skill Recommendations",
-            "🚀 Project Assignment"
+            " Dashboard & Analytics",
+            " Upload Data",
+            " Bench Utilization",
+            " Skill Recommendations",
+            " Project Assignment"
         ]
     )
 else:  # Project Manager
     page = st.sidebar.radio(
         "",
         options=[
-            "🏠 Dashboard & Analytics",
-            "📤 Upload Data",
-            "🪑 My Team Utilization",
-            "🎯 My Team Skills",
-            "🚀 Project Assignment"
+            "Dashboard & Analytics",
+            " Upload Data",
+            "My Team Utilization",
+            "My Team Skills",
+            " Project Assignment"
         ]
     )
 

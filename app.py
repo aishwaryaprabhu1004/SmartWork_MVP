@@ -9,8 +9,6 @@ st.set_page_config(
     layout="wide"
 )
 
-# ---------------- Increase Upload Limit ----------------
-st.set_option('server.maxUploadSize', 512)  # in MB
 
 # ---------------- Custom Sidebar ----------------
 st.markdown("""

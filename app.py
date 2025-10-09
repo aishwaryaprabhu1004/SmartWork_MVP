@@ -92,22 +92,23 @@ def assign_complementary_skills(emp_df, proj_df):
 # ---------------- Sidebar ----------------
 st.sidebar.image("logo.png", width=200)
 st.sidebar.markdown("### Navigation")
-# Top-level pages
-main_pages = ["Homepage", "Upload Data", "Project Manager", "HR Head"]
-selected_main = st.sidebar.radio("", main_pages)
 
-# Define sub-pages for roles
+# Top-level pages
+pages = ["Homepage", "Upload Data", "Project Manager", "HR Head"]
+selected_page = st.sidebar.radio("", pages)
+
+# Role-specific features
 pm_features = ["Dashboard & Analytics", "AI Recommendations", "Project Assignment"]
 hr_features = ["Dashboard & Analytics", "AI Recommendations", "Skill Recommendations", "Project Assignment"]
 
-if selected_main == "Project Manager":
+if selected_page == "Project Manager":
     st.sidebar.markdown("Project Manager Features")
-    selected_feature = st.sidebar.radio("", pm_features, key="pm_feature")
-elif selected_main == "HR Head":
+    selected_feature = st.sidebar.radio("", pm_features, key="pm_features")
+elif selected_page == "HR Head":
     st.sidebar.markdown("HR Head Features")
-    selected_feature = st.sidebar.radio("", hr_features, key="hr_feature")
+    selected_feature = st.sidebar.radio("", hr_features, key="hr_features")
 else:
-    selected_feature = selected_main
+    selected_feature = selected_page
 
 # ---------------- Pages ----------------
 
@@ -138,7 +139,7 @@ elif selected_feature == "Upload Data":
         if f4: st.session_state['reportees'] = load_file(f4)
 
 # ---------------- Project Manager Pages ----------------
-elif selected_main == "Project Manager":
+elif selected_page == "Project Manager":
     df = calculate_utilization(st.session_state['activity'])
     proj_df = st.session_state['projects']
     reportees_df = st.session_state['reportees']
@@ -182,7 +183,7 @@ elif selected_main == "Project Manager":
             st.dataframe(assignment_df, height=400)
 
 # ---------------- HR Head Pages ----------------
-elif selected_main == "HR Head":
+elif selected_page == "HR Head":
     df = calculate_utilization(st.session_state['activity'])
     proj_df = st.session_state['projects']
     df_skills = st.session_state['skills']
@@ -231,6 +232,7 @@ elif selected_main == "HR Head":
             st.subheader("HR Project Assignment")
             assignment_df = assign_complementary_skills(df, proj_df)
             st.dataframe(assignment_df, height=400)
+
 
 
 

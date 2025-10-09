@@ -92,22 +92,20 @@ def assign_complementary_skills(emp_df, proj_df):
 # ---------------- Sidebar ----------------
 st.sidebar.image("logo.png", width=200)
 st.sidebar.markdown("### Navigation")
-# Main pages
-pages = ["Homepage", "Upload Data", "Project Manager", "HR Head"]
-selected_main = st.sidebar.radio("", pages)
+# Top-level pages
+main_pages = ["Homepage", "Upload Data", "Project Manager", "HR Head"]
+selected_main = st.sidebar.radio("", main_pages)
 
-# Nested features
+# Define sub-pages for roles
+pm_features = ["Dashboard & Analytics", "AI Recommendations", "Project Assignment"]
+hr_features = ["Dashboard & Analytics", "AI Recommendations", "Skill Recommendations", "Project Assignment"]
+
 if selected_main == "Project Manager":
-    st.sidebar.markdown("&nbsp;&nbsp;&nbsp;Dashboard", unsafe_allow_html=True)
-    st.sidebar.markdown("&nbsp;&nbsp;&nbsp;AI Recommendations", unsafe_allow_html=True)
-    st.sidebar.markdown("&nbsp;&nbsp;&nbsp;Project Assignment", unsafe_allow_html=True)
-    selected_feature = st.sidebar.radio("", ["Dashboard", "AI Recommendations", "Project Assignment"], key="pm_feature")
+    st.sidebar.markdown("Project Manager Features")
+    selected_feature = st.sidebar.radio("", pm_features, key="pm_feature")
 elif selected_main == "HR Head":
-    st.sidebar.markdown("&nbsp;&nbsp;&nbsp;Dashboard", unsafe_allow_html=True)
-    st.sidebar.markdown("&nbsp;&nbsp;&nbsp;AI Recommendations", unsafe_allow_html=True)
-    st.sidebar.markdown("&nbsp;&nbsp;&nbsp;Skill Recommendations", unsafe_allow_html=True)
-    st.sidebar.markdown("&nbsp;&nbsp;&nbsp;Project Assignment", unsafe_allow_html=True)
-    selected_feature = st.sidebar.radio("", ["Dashboard", "AI Recommendations", "Skill Recommendations", "Project Assignment"], key="hr_feature")
+    st.sidebar.markdown("HR Head Features")
+    selected_feature = st.sidebar.radio("", hr_features, key="hr_feature")
 else:
     selected_feature = selected_main
 
@@ -153,7 +151,7 @@ elif selected_main == "Project Manager":
         reportees = reportees_df[reportees_df['Project_Manager']==selected_pm]
         df_pm = df[df['Employee'].isin(reportees['Employee'])]
         
-        if selected_feature=="Dashboard":
+        if selected_feature=="Dashboard & Analytics":
             st.subheader(f"{selected_pm} Dashboard")
             total_emp = len(df_pm)
             bench_count = len(df_pm[df_pm['Bench_Status']=="On Bench"])
@@ -192,7 +190,7 @@ elif selected_main == "HR Head":
     if df.empty:
         st.info("Upload Employee Activity first")
     else:
-        if selected_feature=="Dashboard":
+        if selected_feature=="Dashboard & Analytics":
             st.subheader("HR Dashboard")
             total_emp = len(df)
             bench_count = len(df[df['Bench_Status']=="On Bench"])
@@ -233,6 +231,7 @@ elif selected_main == "HR Head":
             st.subheader("HR Project Assignment")
             assignment_df = assign_complementary_skills(df, proj_df)
             st.dataframe(assignment_df, height=400)
+
 
 
 

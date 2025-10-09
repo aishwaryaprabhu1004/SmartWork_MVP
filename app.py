@@ -101,24 +101,27 @@ if 'projects' not in st.session_state: st.session_state['projects'] = pd.DataFra
 if 'reportees' not in st.session_state: st.session_state['reportees'] = pd.DataFrame()
 
 # ---------------- Sidebar ----------------
-st.sidebar.markdown("### Roles & Features")
+st.sidebar.markdown("### Navigation")
 
-page_options = [
+# Sidebar hierarchy
+sidebar_options = [
     "🏠 Homepage",
     "📤 Upload Data",
-    "👨‍💼 Project Manager Dashboard",
-    "👨‍💼 Project Manager Reportees",
-    "👨‍💼 Project Manager AI Recommendations",
-    "👩‍💼 HR Head Dashboard & Analytics",
-    "👩‍💼 HR Head Skill Recommendations",
-    "👩‍💼 HR Head Project Assignment",
-    "👩‍💼 HR Head AI Recommendations"
+    "👨‍💼 Project Manager",
+    " • Dashboard & Analytics",
+    " • Reportees",
+    " • AI Recommendations",
+    "👩‍💼 HR Head",
+    " • Dashboard & Analytics",
+    " • Skill Recommendations",
+    " • Project Assignment",
+    " • AI Recommendations"
 ]
 
-page = st.sidebar.radio("", options=page_options, index=0)
+page = st.sidebar.radio("", options=sidebar_options, index=0)
 
 # ---------------- Pages ----------------
-# ---------- Homepage ----------
+# Homepage
 if page=="🏠 Homepage":
     st.markdown("<h1 style='text-align:left'>SmartWork.AI 💡</h1>", unsafe_allow_html=True)
     st.image("logo.png", width=300)
@@ -128,7 +131,7 @@ if page=="🏠 Homepage":
         Gain actionable insights and AI-based recommendations to optimize resources, reduce bench costs, and improve project delivery.
     """, unsafe_allow_html=True)
 
-# ---------- Upload Data ----------
+# Upload Data
 elif page=="📤 Upload Data":
     st.subheader("Upload Data 📤")
     col1, col2, col3, col4 = st.columns([1,1,1,1])
@@ -145,9 +148,9 @@ elif page=="📤 Upload Data":
         f4 = st.file_uploader("Project Manager Reportees", type=["csv","xlsx"])
         if f4: st.session_state['reportees'] = load_file(f4)
 
-# ---------- Project Manager Dashboard ----------
-elif page=="👨‍💼 Project Manager Dashboard":
-    st.subheader("Project Manager Dashboard 👨‍💼")
+# Project Manager pages
+elif page==" • Dashboard & Analytics":
+    st.subheader("Project Manager Dashboard & Analytics")
     reportees_df = st.session_state['reportees']
     df_emp = st.session_state['activity']
     if reportees_df.empty or df_emp.empty:
@@ -158,8 +161,7 @@ elif page=="👨‍💼 Project Manager Dashboard":
         pm_reportees = reportees_df[reportees_df['Project_Manager']==selected_pm]['Employee'].tolist()
         df_pm = df_emp[df_emp['Employee'].isin(pm_reportees)]
         df_pm = calculate_utilization(df_pm)
-        
-        # Utilization metrics
+
         total_emp = len(df_pm)
         bench_count = len(df_pm[df_pm['Bench_Status']=="On Bench"])
         part_util = len(df_pm[df_pm['Bench_Status']=="Partially Utilized"])
@@ -170,19 +172,17 @@ elif page=="👨‍💼 Project Manager Dashboard":
         k3.metric("Partial Utilization", part_util)
         k4.metric("Full Utilization", full_util)
 
-        # Connected Line Chart for reportees utilization
+        # Utilization trend line chart (reportees only)
         line_chart = alt.Chart(df_pm.reset_index()).mark_line(point=True).encode(
             x='index',
             y='True_Utilization',
-            color='Dept',
-            tooltip=['Employee','Dept','True_Utilization']
+            color='Employee',
+            tooltip=['Employee','True_Utilization']
         )
         st.altair_chart(line_chart, use_container_width=True)
+        st.dataframe(df_pm[['Employee','Bench_Status','True_Utilization']], height=300)
 
-        st.dataframe(df_pm[['Employee','Dept','Bench_Status','True_Utilization']], height=300)
-
-# ---------- Project Manager Reportees ----------
-elif page=="👨‍💼 Project Manager Reportees":
+elif page==" • Reportees":
     st.subheader("Project Manager Reportees")
     reportees_df = st.session_state['reportees']
     df_emp = st.session_state['activity']
@@ -195,8 +195,7 @@ elif page=="👨‍💼 Project Manager Reportees":
         df_pm = df_emp[df_emp['Employee'].isin(pm_reportees)]
         st.dataframe(df_pm[['Employee','Dept','Skills']], height=400)
 
-# ---------- Project Manager AI Recommendations ----------
-elif page=="👨‍💼 Project Manager AI Recommendations":
+elif page==" • AI Recommendations":
     st.subheader("Project Manager AI Recommendations")
     reportees_df = st.session_state['reportees']
     df_emp = st.session_state['activity']
@@ -210,9 +209,9 @@ elif page=="👨‍💼 Project Manager AI Recommendations":
         for i, rec in enumerate(recs,1):
             st.markdown(f"**{i}.** {rec}")
 
-# ---------- HR Head Dashboard & Analytics ----------
-elif page=="👩‍💼 HR Head Dashboard & Analytics":
-    st.subheader("HR Head Dashboard & Analytics 👩‍💼")
+# HR Head pages
+elif page==" • Dashboard & Analytics":
+    st.subheader("HR Head Dashboard & Analytics")
     df_emp = calculate_utilization(st.session_state['activity'])
     if df_emp.empty:
         st.info("Upload Employee Activity first")
@@ -226,32 +225,30 @@ elif page=="👩‍💼 HR Head Dashboard & Analytics":
         st.altair_chart(line_chart, use_container_width=True)
         st.dataframe(dept_avg, height=300)
 
-# ---------- HR Head Skill Recommendations ----------
-elif page=="👩‍💼 HR Head Skill Recommendations":
+elif page==" • Skill Recommendations":
     st.subheader("HR Head Skill Recommendations")
     df_emp = st.session_state['activity']
-    df_skills = st.session_state['skills']
     df_proj = st.session_state['projects']
-    if df_emp.empty or df_skills.empty or df_proj.empty:
-        st.info("Upload all required files first")
+    if df_emp.empty or df_proj.empty:
+        st.info("Upload required files first")
     else:
-        # Assign top 2 relevant skills per employee considering project skill needs
-        required_skills = set()
-        for _, proj in df_proj.iterrows():
-            skills = str(proj.get('Required_Skills','')).split(",")
-            required_skills.update(skills)
-        required_skills = list(required_skills)
-
-        def rec(skills_str):
-            emp_skills = set(str(skills_str).split(",")) if pd.notnull(skills_str) else set()
-            missing = list(set(required_skills) - emp_skills)
-            return ", ".join(missing[:2]) if missing else "None"
+        # Complementary skill assignment: top 2 skills per employee per project
+        assigned_skills = {}
+        def rec(emp_name, current_skills):
+            current_skills = set(str(current_skills).split(",")) if pd.notnull(current_skills) else set()
+            needed = set()
+            for _, proj in df_proj.iterrows():
+                proj_emps = df_proj['Project_Name']  # just loop through projects
+                skills = set(str(proj.get('Required_Skills','')).split(","))
+                needed |= skills
+            available = list(needed - current_skills)
+            chosen = available[:2] if available else []
+            return ", ".join(chosen) if chosen else "None"
         
-        df_emp['Recommended_Skills'] = df_emp['Skills'].apply(rec)
+        df_emp['Recommended_Skills'] = df_emp.apply(lambda x: rec(x['Employee'], x['Skills']), axis=1)
         st.dataframe(df_emp[['Employee','Skills','Recommended_Skills','Bench_Status']], height=400)
 
-# ---------- HR Head Project Assignment ----------
-elif page=="👩‍💼 HR Head Project Assignment":
+elif page==" • Project Assignment":
     st.subheader("HR Head Project Assignment")
     df_emp = st.session_state['activity']
     df_proj = st.session_state['projects']
@@ -271,8 +268,7 @@ elif page=="👩‍💼 HR Head Project Assignment":
                     })
         st.dataframe(pd.DataFrame(assignments), height=400)
 
-# ---------- HR Head AI Recommendations ----------
-elif page=="👩‍💼 HR Head AI Recommendations":
+elif page==" • AI Recommendations":
     st.subheader("HR Head AI Recommendations")
     df_emp = st.session_state['activity']
     df_proj = st.session_state['projects']
@@ -282,9 +278,3 @@ elif page=="👩‍💼 HR Head AI Recommendations":
         recs = ai_recommendations_hr(df_emp, df_proj)
         for i, rec in enumerate(recs,1):
             st.markdown(f"**{i}.** {rec}")
-
-
-
-
-
-

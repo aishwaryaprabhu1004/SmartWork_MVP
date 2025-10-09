@@ -59,10 +59,6 @@ def assign_complementary_skills(df_emp, df_proj):
     return assigned_skills
 
 def ai_recommendations(activity_df, project_df, reportees_df=None, role="HR Head"):
-    """
-    Provide AI-based actionable recommendations.
-    Includes impact estimations like utilization improvement or cost reduction.
-    """
     recs = []
     if activity_df.empty or project_df.empty:
         return ["Upload Employee and Project data for recommendations."]
@@ -97,30 +93,22 @@ if 'activity' not in st.session_state: st.session_state['activity'] = pd.DataFra
 if 'skills' not in st.session_state: st.session_state['skills'] = pd.DataFrame()
 if 'projects' not in st.session_state: st.session_state['projects'] = pd.DataFrame()
 if 'reportees' not in st.session_state: st.session_state['reportees'] = pd.DataFrame()
-if 'role' not in st.session_state: st.session_state['role'] = 'HR Head'
 
 # ---------------- Sidebar ----------------
-sidebar_options = [
-    "🏠 Homepage",
-    "📤 Upload Data",
-    "Project Manager",
-    "HR Head"
-]
+st.sidebar.title("Navigation")
+page = st.sidebar.radio("Go to", ["🏠 Homepage","📤 Upload Data","Project Manager","HR Head"])
 
-page = st.sidebar.radio("Navigation", sidebar_options)
-
-# Indented features per role
-if page=="Project Manager":
-    role_features = ["Dashboard & Analytics","Reportees","AI Recommendations"]
-elif page=="HR Head":
-    role_features = ["Dashboard & Analytics","Skill Recommendations","Project Assignment","AI Recommendations","Select Project Manager"]
-else:
-    role_features = []
-
-if role_features:
-    st.sidebar.markdown("   ")
-    for feat in role_features:
-        st.sidebar.radio(f"➤ {feat}", [feat], index=0, key=feat)
+# Features under each role (indented)
+if page == "Project Manager":
+    st.sidebar.markdown("    Dashboard & Analytics")
+    st.sidebar.markdown("    Reportees")
+    st.sidebar.markdown("    AI Recommendations")
+elif page == "HR Head":
+    st.sidebar.markdown("    Dashboard & Analytics")
+    st.sidebar.markdown("    Skill Recommendations")
+    st.sidebar.markdown("    Project Assignment")
+    st.sidebar.markdown("    AI Recommendations")
+    st.sidebar.markdown("    Select Project Manager")
 
 # ---------------- Pages ----------------
 
@@ -151,28 +139,26 @@ elif page=="📤 Upload Data":
         f4 = st.file_uploader("Project Manager Reportees", type=["csv","xlsx"])
         if f4: st.session_state['reportees'] = load_file(f4)
 
-# ---------- Project Manager Pages ----------
+# ---------- Project Manager ----------
 if page=="Project Manager":
     st.subheader("Project Manager Dashboard")
     reportees_df = st.session_state['reportees']
     activity_df = st.session_state['activity']
     proj_df = st.session_state['projects']
 
-    if reportees_df.empty:
-        st.info("Upload Project Manager Reportees first")
+    if reportees_df.empty or activity_df.empty:
+        st.info("Upload Project Manager Reportees and Employee Activity first")
     else:
-        # Only show their reportees
         df = activity_df[activity_df['Employee'].isin(reportees_df['Employee'])]
         df = calculate_utilization(df)
-        st.dataframe(df[['Employee','Dept','Bench_Status','True_Utilization']], height=300)
+        st.dataframe(df[['Employee','Bench_Status','True_Utilization']], height=300)
 
-        # AI Recommendations for Project Manager
         st.subheader("AI Recommendations 🤖")
         recs = ai_recommendations(df, proj_df, reportees_df, role="Project Manager")
         for rec in recs:
             st.markdown(f"- {rec}")
 
-# ---------- HR Head Pages ----------
+# ---------- HR Head ----------
 if page=="HR Head":
     st.subheader("HR Head Dashboard")
     df = calculate_utilization(st.session_state['activity'])
@@ -183,7 +169,7 @@ if page=="HR Head":
     if df.empty or proj_df.empty:
         st.info("Upload Employee and Project data first")
     else:
-        # Department average utilization chart
+        # Department average utilization
         dept_util = df.groupby('Dept')['True_Utilization'].mean().reset_index()
         bar_chart = alt.Chart(dept_util).mark_bar().encode(
             x='Dept',
@@ -192,7 +178,7 @@ if page=="HR Head":
         )
         st.altair_chart(bar_chart, use_container_width=True)
 
-        # Connected line chart
+        # Line chart for utilization trend
         line_chart = alt.Chart(df.reset_index()).mark_line(point=True).encode(
             x='index',
             y='True_Utilization',
@@ -201,7 +187,16 @@ if page=="HR Head":
         )
         st.altair_chart(line_chart, use_container_width=True)
 
-        # Top 2 skill recommendations
+        # Select Project Manager dropdown
+        pm_list = reportees_df['Manager'].unique().tolist() if not reportees_df.empty else []
+        selected_pm = None
+        if pm_list:
+            selected_pm = st.selectbox("Select Project Manager to view team", pm_list)
+            df_pm_team = df[df['Employee'].isin(reportees_df[reportees_df['Manager']==selected_pm]['Employee'])]
+            st.subheader(f"{selected_pm}'s Team Dashboard")
+            st.dataframe(df_pm_team[['Employee','Dept','Bench_Status','True_Utilization']], height=300)
+
+        # Skill Recommendations (Top 2 relevant skills)
         if not skills_df.empty:
             required_skills = skills_df['Skill'].value_counts().head(2).index.tolist()
             def rec(skills_str):
@@ -218,12 +213,5 @@ if page=="HR Head":
         for rec in recs:
             st.markdown(f"- {rec}")
 
-        # Select Project Manager to filter view
-        pm_list = reportees_df['Manager'].unique().tolist() if not reportees_df.empty else []
-        if pm_list:
-            selected_pm = st.selectbox("Select Project Manager to view team", pm_list)
-            df_pm_team = df[df['Employee'].isin(reportees_df[reportees_df['Manager']==selected_pm]['Employee'])]
-            st.subheader(f"{selected_pm}'s Team Dashboard")
-            st.dataframe(df_pm_team[['Employee','Dept','Bench_Status','True_Utilization']], height=300)
 
 

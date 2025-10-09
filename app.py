@@ -10,18 +10,12 @@ st.set_page_config(
 )
 
 # ---------------- Session State ----------------
-if 'activity' not in st.session_state:
-    st.session_state['activity'] = pd.DataFrame()
-if 'skills' not in st.session_state:
-    st.session_state['skills'] = pd.DataFrame()
-if 'projects' not in st.session_state:
-    st.session_state['projects'] = pd.DataFrame()
-if 'reportees' not in st.session_state:
-    st.session_state['reportees'] = pd.DataFrame()
-if 'selected_pm' not in st.session_state:
-    st.session_state['selected_pm'] = None
-if 'page' not in st.session_state:
-    st.session_state['page'] = 'Homepage'
+if 'activity' not in st.session_state: st.session_state['activity'] = pd.DataFrame()
+if 'skills' not in st.session_state: st.session_state['skills'] = pd.DataFrame()
+if 'projects' not in st.session_state: st.session_state['projects'] = pd.DataFrame()
+if 'reportees' not in st.session_state: st.session_state['reportees'] = pd.DataFrame()
+if 'selected_pm' not in st.session_state: st.session_state['selected_pm'] = None
+if 'page' not in st.session_state: st.session_state['page'] = 'Homepage'
 
 # ---------------- Helper Functions ----------------
 def load_file(file):
@@ -98,76 +92,80 @@ def assign_complementary_skills(emp_df, proj_df):
 # ---------------- Sidebar ----------------
 st.sidebar.image("logo.png", width=200)
 st.sidebar.markdown("### Navigation")
+# Main pages
+pages = ["Homepage", "Upload Data", "Project Manager", "HR Head"]
+selected_main = st.sidebar.radio("", pages)
 
-# Roles
-role_options = ["Project Manager", "HR Head"]
-selected_role = st.sidebar.radio("Select Role", role_options)
-
-# Features per role
-features_pm = ["Dashboard", "AI Recommendations", "Project Assignment"]
-features_hr = ["Dashboard", "AI Recommendations", "Skill Recommendations", "Project Assignment"]
-
-if selected_role=="Project Manager":
-    st.sidebar.markdown("**Project Manager Features:**")
-    selected_feature = st.sidebar.radio("Select Feature", features_pm, key="pm_feature")
-elif selected_role=="HR Head":
-    st.sidebar.markdown("**HR Head Features:**")
-    selected_feature = st.sidebar.radio("Select Feature", features_hr, key="hr_feature")
+# Nested features
+if selected_main == "Project Manager":
+    st.sidebar.markdown("&nbsp;&nbsp;&nbsp;Dashboard", unsafe_allow_html=True)
+    st.sidebar.markdown("&nbsp;&nbsp;&nbsp;AI Recommendations", unsafe_allow_html=True)
+    st.sidebar.markdown("&nbsp;&nbsp;&nbsp;Project Assignment", unsafe_allow_html=True)
+    selected_feature = st.sidebar.radio("", ["Dashboard", "AI Recommendations", "Project Assignment"], key="pm_feature")
+elif selected_main == "HR Head":
+    st.sidebar.markdown("&nbsp;&nbsp;&nbsp;Dashboard", unsafe_allow_html=True)
+    st.sidebar.markdown("&nbsp;&nbsp;&nbsp;AI Recommendations", unsafe_allow_html=True)
+    st.sidebar.markdown("&nbsp;&nbsp;&nbsp;Skill Recommendations", unsafe_allow_html=True)
+    st.sidebar.markdown("&nbsp;&nbsp;&nbsp;Project Assignment", unsafe_allow_html=True)
+    selected_feature = st.sidebar.radio("", ["Dashboard", "AI Recommendations", "Skill Recommendations", "Project Assignment"], key="hr_feature")
+else:
+    selected_feature = selected_main
 
 # ---------------- Pages ----------------
 
-# Homepage (common)
-if selected_feature=="Homepage":
+# Homepage
+if selected_feature == "Homepage":
     st.markdown("<h1>SmartWork.AI 💡</h1>", unsafe_allow_html=True)
     st.markdown("### The AI-powered tool for CHROs")
-    st.markdown("""SmartWork.AI helps HR heads and Project Managers monitor employee utilization, skills, and project assignments.
-                  Gain actionable insights and AI-based recommendations to optimize resources, reduce bench costs, and improve project delivery.""")
+    st.markdown("""
+    SmartWork.AI helps HR Heads and Project Managers monitor employee utilization, skills, and project assignments.
+    Gain actionable insights and AI-based recommendations to optimize resources, reduce bench costs, and improve project delivery.
+    """)
 
-# Upload Data (common)
-st.markdown("---")
-st.subheader("Upload Data 📤")
-col1, col2, col3, col4 = st.columns(4)
-with col1:
-    f1 = st.file_uploader("Employee Activity", type=["csv","xlsx"])
-    if f1: st.session_state['activity'] = load_file(f1)
-with col2:
-    f2 = st.file_uploader("Skill Training", type=["csv","xlsx"])
-    if f2: st.session_state['skills'] = load_file(f2)
-with col3:
-    f3 = st.file_uploader("Project Assignment", type=["csv","xlsx"])
-    if f3: st.session_state['projects'] = load_file(f3)
-with col4:
-    f4 = st.file_uploader("Project Manager Reportees", type=["csv","xlsx"])
-    if f4: st.session_state['reportees'] = load_file(f4)
-
-# Role-specific logic
-df = calculate_utilization(st.session_state['activity'])
-proj_df = st.session_state['projects']
-reportees_df = st.session_state['reportees']
+# Upload Data
+elif selected_feature == "Upload Data":
+    st.subheader("Upload Data 📤")
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        f1 = st.file_uploader("Employee Activity", type=["csv","xlsx"])
+        if f1: st.session_state['activity'] = load_file(f1)
+    with col2:
+        f2 = st.file_uploader("Skill Training", type=["csv","xlsx"])
+        if f2: st.session_state['skills'] = load_file(f2)
+    with col3:
+        f3 = st.file_uploader("Project Assignment", type=["csv","xlsx"])
+        if f3: st.session_state['projects'] = load_file(f3)
+    with col4:
+        f4 = st.file_uploader("Project Manager Reportees", type=["csv","xlsx"])
+        if f4: st.session_state['reportees'] = load_file(f4)
 
 # ---------------- Project Manager Pages ----------------
-if selected_role=="Project Manager":
+elif selected_main == "Project Manager":
+    df = calculate_utilization(st.session_state['activity'])
+    proj_df = st.session_state['projects']
+    reportees_df = st.session_state['reportees']
+    
     if df.empty or reportees_df.empty:
         st.info("Upload Employee Activity and Reportees first")
     else:
         pm_list = reportees_df['Project_Manager'].unique().tolist()
         selected_pm = st.selectbox("Select Project Manager", pm_list)
         reportees = reportees_df[reportees_df['Project_Manager']==selected_pm]
-        df = df[df['Employee'].isin(reportees['Employee'])]
+        df_pm = df[df['Employee'].isin(reportees['Employee'])]
         
         if selected_feature=="Dashboard":
-            st.subheader("PM Dashboard")
-            total_emp = len(df)
-            bench_count = len(df[df['Bench_Status']=="On Bench"])
-            part_util = len(df[df['Bench_Status']=="Partially Utilized"])
-            full_util = len(df[df['Bench_Status']=="Fully Utilized"])
+            st.subheader(f"{selected_pm} Dashboard")
+            total_emp = len(df_pm)
+            bench_count = len(df_pm[df_pm['Bench_Status']=="On Bench"])
+            part_util = len(df_pm[df_pm['Bench_Status']=="Partially Utilized"])
+            full_util = len(df_pm[df_pm['Bench_Status']=="Fully Utilized"])
             k1,k2,k3,k4 = st.columns([1,1,1,1])
             k1.metric("Total Employees", total_emp)
             k2.metric("On Bench", bench_count)
             k3.metric("Partial Utilization", part_util)
             k4.metric("Full Utilization", full_util)
             
-            bench_chart = df['Bench_Status'].value_counts().reset_index()
+            bench_chart = df_pm['Bench_Status'].value_counts().reset_index()
             bench_chart.columns = ['Bench_Status','Count']
             chart = alt.Chart(bench_chart).mark_bar().encode(
                 x='Bench_Status', y='Count', color='Bench_Status'
@@ -175,18 +173,22 @@ if selected_role=="Project Manager":
             st.altair_chart(chart, use_container_width=True)
         
         elif selected_feature=="AI Recommendations":
-            st.subheader("PM AI Recommendations")
-            recs = ai_recommendations(df, proj_df, role='Project Manager')
+            st.subheader(f"{selected_pm} AI Recommendations")
+            recs = ai_recommendations(df_pm, proj_df, role='Project Manager')
             for i, rec in enumerate(recs,1):
                 st.markdown(f"**{i}.** {rec}")
         
         elif selected_feature=="Project Assignment":
-            st.subheader("PM Project Assignment")
-            assignment_df = assign_complementary_skills(df, proj_df)
+            st.subheader(f"{selected_pm} Project Assignment")
+            assignment_df = assign_complementary_skills(df_pm, proj_df)
             st.dataframe(assignment_df, height=400)
 
 # ---------------- HR Head Pages ----------------
-if selected_role=="HR Head":
+elif selected_main == "HR Head":
+    df = calculate_utilization(st.session_state['activity'])
+    proj_df = st.session_state['projects']
+    df_skills = st.session_state['skills']
+    
     if df.empty:
         st.info("Upload Employee Activity first")
     else:
@@ -207,12 +209,6 @@ if selected_role=="HR Head":
                 x='Dept', y='True_Utilization', color='Dept'
             )
             st.altair_chart(chart, use_container_width=True)
-            
-            line_chart = alt.Chart(df.reset_index()).mark_line(point=True).encode(
-                x='index', y='True_Utilization', color='Dept',
-                tooltip=['Employee','Dept','True_Utilization']
-            )
-            st.altair_chart(line_chart, use_container_width=True)
         
         elif selected_feature=="AI Recommendations":
             st.subheader("HR AI Recommendations")
@@ -222,7 +218,6 @@ if selected_role=="HR Head":
         
         elif selected_feature=="Skill Recommendations":
             st.subheader("HR Skill Recommendations")
-            df_skills = st.session_state['skills']
             if df_skills.empty:
                 st.info("Upload Skills file first")
             else:
@@ -238,6 +233,7 @@ if selected_role=="HR Head":
             st.subheader("HR Project Assignment")
             assignment_df = assign_complementary_skills(df, proj_df)
             st.dataframe(assignment_df, height=400)
+
 
 
 

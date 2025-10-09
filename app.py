@@ -262,5 +262,3 @@ elif page=="👩‍💼 HR Head AI Recommendations":
         recs = ai_recommendations_hr(df_emp, df_proj)
         for i, rec in enumerate(recs,1):
             st.markdown(f"**{i}.** {rec}")
-
-
